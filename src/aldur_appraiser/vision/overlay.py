@@ -69,8 +69,8 @@ def build_inline_overlay(base: str, *, icon_paths=None, divine_rate=None):
     Values are shown as "<n> [unit-icon]"; large totals switch to Divine via
     format_value(divine_rate). icon_paths maps unit -> icon file.
     """
-    from PySide6.QtCore import QRectF, Qt, Signal, Slot
-    from PySide6.QtGui import QColor, QFont, QPainter, QPixmap
+    from PySide6.QtCore import QRectF, Qt, QTimer, Signal, Slot
+    from PySide6.QtGui import QColor, QFont, QPainter, QPen, QPixmap
     from PySide6.QtWidgets import QApplication, QWidget
 
     from aldur_appraiser.pricing.valuation import format_value
@@ -82,6 +82,7 @@ def build_inline_overlay(base: str, *, icon_paths=None, divine_rate=None):
 
     class InlineOverlay(QWidget):
         _show = Signal(object, object)
+        _busy = Signal(object)
         _hide = Signal()
 
         def __init__(self):
@@ -90,6 +91,11 @@ def build_inline_overlay(base: str, *, icon_paths=None, divine_rate=None):
             self.divine_rate = divine_rate
             # (text, x, y, color, pixmap_or_None)
             self._chips: list[tuple[str, float, float, QColor, object]] = []
+            self._spin = None          # (cx, cy) of the spinner while busy, else None
+            self._spin_angle = 0
+            self._spin_timer = QTimer(self)
+            self._spin_timer.setInterval(70)
+            self._spin_timer.timeout.connect(self._tick_spinner)
             self._icons: dict[str, QPixmap] = {}
             for unit, path in (icon_paths or {}).items():
                 pm = QPixmap(str(path))
@@ -106,13 +112,33 @@ def build_inline_overlay(base: str, *, icon_paths=None, divine_rate=None):
             self._font.setPixelSize(22)
             self._font.setBold(True)
             self._show.connect(self._apply_show)
+            self._busy.connect(self._apply_busy)
             self._hide.connect(self._apply_hide)
 
         def post_rows(self, rows, anchor) -> None:
             self._show.emit(rows, anchor)
 
+        def post_busy(self, anchor) -> None:
+            self._busy.emit(anchor)
+
         def post_hide(self) -> None:
             self._hide.emit()
+
+        def _tick_spinner(self) -> None:
+            self._spin_angle = (self._spin_angle + 30) % 360
+            self.update()
+
+        @Slot(object)
+        def _apply_busy(self, anchor) -> None:
+            rl, rt, rw, rh, fw, fh = anchor
+            self.setGeometry(self._screen_for_frame(fw, fh).geometry())
+            self._chips = []
+            self._spin = (rl + rw + 26, rt + 22)  # near the panel's reward column
+            if not self._spin_timer.isActive():
+                self._spin_timer.start()
+            self.update()
+            self.show()
+            self.raise_()
 
         def _screen_for_frame(self, fw: int, fh: int):
             for s in QApplication.screens():
@@ -125,6 +151,8 @@ def build_inline_overlay(base: str, *, icon_paths=None, divine_rate=None):
         def _apply_show(self, rows, anchor) -> None:
             rl, rt, rw, rh, fw, fh = anchor
             self.setGeometry(self._screen_for_frame(fw, fh).geometry())
+            self._spin_timer.stop()
+            self._spin = None
             chips = []
             for r in rows:
                 v = r.valuation
@@ -149,14 +177,31 @@ def build_inline_overlay(base: str, *, icon_paths=None, divine_rate=None):
 
         @Slot()
         def _apply_hide(self) -> None:
+            self._spin_timer.stop()
+            self._spin = None
             self._chips = []
             self.hide()
 
+        def _paint_spinner(self, p) -> None:
+            cx, cy = self._spin
+            r = 14
+            pen = QPen(QColor(150, 205, 255))
+            pen.setWidth(4)
+            pen.setCapStyle(Qt.RoundCap)
+            p.setPen(pen)
+            p.setBrush(Qt.NoBrush)
+            # a 270-degree arc rotating with the tick (Qt angles are 1/16 deg)
+            p.drawArc(QRectF(cx - r, cy - r, 2 * r, 2 * r), -self._spin_angle * 16, 270 * 16)
+
         def paintEvent(self, _event) -> None:
-            if not self._chips:
+            if self._spin is None and not self._chips:
                 return
             p = QPainter(self)
             p.setRenderHint(QPainter.Antialiasing)
+            if self._spin is not None:
+                self._paint_spinner(p)
+                p.end()
+                return
             p.setFont(self._font)
             fm = p.fontMetrics()
             pad, gap = 9, 5

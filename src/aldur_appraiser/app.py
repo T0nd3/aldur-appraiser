@@ -48,6 +48,9 @@ class AppraiserLoop:
     # data (inline overlay), and the anchor mapping ROI pixels to the screen.
     on_result: Callable[[Appraisal], None]
     on_hide: Callable[[], None]
+    # on_busy(anchor): fired when a (changed) panel is detected and OCR is about
+    # to run, so the overlay can show a spinner during the ~OCR delay.
+    on_busy: Callable[[tuple], None] = lambda _anchor: None
     score_cutoff: int = 80
 
     _last_sig: np.ndarray | None = None
@@ -71,11 +74,12 @@ class AppraiserLoop:
 
         self._last_sig = sig
         self._panel_visible = True
+        anchor = (rect.left, rect.top, rect.width, rect.height, frame.shape[1], frame.shape[0])
+        self.on_busy(anchor)  # "appraising…" spinner before the (slow) OCR
         rows = appraise_roi_rows(
             roi, self.prices, engine=self.engine, score_cutoff=self.score_cutoff
         )
         result = rows_to_result(rows)
-        anchor = (rect.left, rect.top, rect.width, rect.height, frame.shape[1], frame.shape[0])
         self.on_result(Appraisal(result=result, rows=rows, anchor=anchor))
         return result
 
@@ -145,13 +149,14 @@ def _prepare(backend: str | None, *, refresh: bool = False) -> _Setup:
     return _Setup(pc=pc, cached=cached, poll_fps=poll_fps, backend=backend or default_backend())
 
 
-def _make_loop(s: _Setup, on_result, on_hide) -> AppraiserLoop:
+def _make_loop(s: _Setup, on_result, on_hide, on_busy=lambda _a: None) -> AppraiserLoop:
     return AppraiserLoop(
         prices=s.cached.table,
         detector=PanelDetector(),
         engine=ocr.get_engine(),
         on_result=on_result,
         on_hide=on_hide,
+        on_busy=on_busy,
     )
 
 
@@ -210,20 +215,59 @@ def run_overlay(*, backend: str | None = None, style: str = "corner", refresh: b
         icons = currency_icon_paths(s.pc.realm, s.pc.league)  # {exalted,divine} best-effort
         overlay = build_inline_overlay(s.pc.base, icon_paths=icons, divine_rate=dr)
         on_result = lambda a: overlay.post_rows(a.rows, a.anchor)  # noqa: E731
+        on_busy = overlay.post_busy
     else:
         overlay = build_overlay(s.pc.base)
         on_result = lambda a: overlay.post_result(a.result, stale, a.anchor, dr)  # noqa: E731
+        on_busy = lambda _anchor: None  # noqa: E731  (corner HUD has no spinner)
 
-    tray = _make_tray(app, s, app_icon)
+    from PySide6.QtCore import QUrl
+    from PySide6.QtGui import QAction, QDesktopServices
 
-    # Bridge worker-thread errors to the GUI thread (tray notification).
+    from aldur_appraiser import __version__, updates
+
+    # Bridge background-thread events to the GUI thread (tray notifications).
     class _Bridge(QObject):
         error = Signal(str)
+        update = Signal(str)     # a newer release is available
+        uptodate = Signal(str)   # manual check: already current
 
     bridge = _Bridge()
+
+    def _check_updates(notify_uptodate: bool) -> None:
+        def run():
+            latest = updates.newer_release(__version__)
+            if latest:
+                bridge.update.emit(latest)
+            elif notify_uptodate:
+                bridge.uptodate.emit(__version__)
+
+        threading.Thread(target=run, daemon=True).start()
+
+    tray = _make_tray(app, s, app_icon, on_check=lambda: _check_updates(True))
+
     if tray is not None:
-        bridge.error.connect(
-            lambda msg: tray.showMessage("Aldur Appraiser", msg, tray.MessageIcon.Critical, 10000)
+        def _notify(body, level):
+            tray.showMessage("Aldur Appraiser", body, level, 9000)
+
+        info = tray.MessageIcon.Information
+        bridge.error.connect(lambda m: _notify(m, tray.MessageIcon.Critical))
+        bridge.uptodate.connect(lambda v: _notify(f"v{v} ist aktuell.", info))
+
+        added = {"done": False}
+
+        def _on_update(latest):
+            _notify(f"Update {latest} verfügbar — klicken zum Öffnen.", info)
+            menu = tray.contextMenu()
+            if menu is not None and not added["done"]:
+                act = QAction(f"Update {latest} herunterladen")
+                act.triggered.connect(lambda: QDesktopServices.openUrl(QUrl(updates.RELEASES_PAGE)))
+                menu.insertAction(menu.actions()[-1], act)  # above "Beenden"
+                added["done"] = True
+
+        bridge.update.connect(_on_update)
+        tray.messageClicked.connect(
+            lambda: QDesktopServices.openUrl(QUrl(updates.RELEASES_PAGE))
         )
 
     def worker() -> None:
@@ -233,7 +277,9 @@ def run_overlay(*, backend: str | None = None, style: str = "corner", refresh: b
             with open_capture(backend=s.backend) as cap:
                 if hasattr(cap, "assert_capturable"):
                     cap.assert_capturable()
-                loop = _make_loop(s, on_result=on_result, on_hide=overlay.post_hide)
+                loop = _make_loop(
+                    s, on_result=on_result, on_hide=overlay.post_hide, on_busy=on_busy
+                )
                 loop.run(cap, poll_fps=s.poll_fps)
         except Exception as exc:  # noqa: BLE001 - surface backend errors to the tray
             msg = f"{type(exc).__name__}: {exc}"
@@ -249,13 +295,16 @@ def run_overlay(*, backend: str | None = None, style: str = "corner", refresh: b
     timer = QTimer()
     timer.start(200)
     timer.timeout.connect(lambda: None)
+    _check_updates(notify_uptodate=False)  # silent auto-check on startup
     return app.exec()
 
 
-def _make_tray(app, setup, icon_path):
-    """System-tray icon with a right-click menu (Quit). None if unavailable."""
+def _make_tray(app, setup, icon_path, on_check):
+    """System-tray icon with a right-click menu (check updates, quit)."""
     from PySide6.QtGui import QAction, QColor, QIcon, QPainter, QPixmap
     from PySide6.QtWidgets import QMenu, QSystemTrayIcon
+
+    from aldur_appraiser import __version__
 
     if not QSystemTrayIcon.isSystemTrayAvailable():
         return None
@@ -276,9 +325,13 @@ def _make_tray(app, setup, icon_path):
     tray = QSystemTrayIcon(icon)
     tray.setToolTip(f"Aldur Appraiser — {setup.pc.league}")
     menu = QMenu()
-    title = QAction("Aldur Appraiser")
+    title = QAction(f"Aldur Appraiser v{__version__}")
     title.setEnabled(False)
     menu.addAction(title)
+    menu.addSeparator()
+    check_action = QAction("Nach Updates suchen")
+    check_action.triggered.connect(on_check)
+    menu.addAction(check_action)
     menu.addSeparator()
     quit_action = QAction("Beenden")
     quit_action.triggered.connect(app.quit)

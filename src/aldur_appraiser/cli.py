@@ -103,6 +103,21 @@ def cmd_image(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_update_check(args: argparse.Namespace) -> int:
+    from aldur_appraiser import __version__, updates
+
+    latest = updates.latest_version()
+    if latest is None:
+        print("could not reach the update server", file=sys.stderr)
+        return 1
+    if updates.is_newer(latest, __version__):
+        print(f"update available: v{latest} (you have v{__version__})")
+        print(f"  download: {updates.RELEASES_PAGE}")
+    else:
+        print(f"up to date (v{__version__})")
+    return 0
+
+
 def cmd_selftest(args: argparse.Namespace) -> int:
     """Offline check that bundled vision deps load (used by the Windows CI)."""
     import numpy as np
@@ -188,6 +203,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     sub.add_parser("selftest", help="offline check that bundled vision deps load").set_defaults(
         func=cmd_selftest
+    )
+    sub.add_parser("update-check", help="check GitHub for a newer release").set_defaults(
+        func=cmd_update_check
     )
 
     pr = sub.add_parser("run", help="live loop: capture + detect + appraise (overlay by default)")
