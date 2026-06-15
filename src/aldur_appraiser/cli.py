@@ -3,6 +3,7 @@
     appraiser price "Divine Orb" 3            # value a reward option
     appraiser price "divin orb" 3 --fuzzy     # fuzzy-snap a noisy name
     appraiser table --top 15                  # dump the price table
+    appraiser image panel.png                 # appraise rewards from an image
     appraiser                                 # no-op (Phase-0 smoke test)
 """
 
@@ -56,6 +57,35 @@ def cmd_price(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_image(args: argparse.Namespace) -> int:
+    import cv2
+
+    from aldur_appraiser.pipeline import appraise_image
+
+    image = cv2.imread(args.path)
+    if image is None:
+        print(f"error: could not read image {args.path!r}", file=sys.stderr)
+        return 1
+
+    cached, base = _load_prices(args)
+    result = appraise_image(image, cached.table)
+    if not result.items:
+        print("no reward options recognised in image")
+        return 0
+
+    stale = " [STALE PRICES]" if cached.stale else ""
+    print(f"Reward ranking (base={base}){stale}:")
+    for v in result.items:
+        marker = " <-- BEST" if v.is_best else ""
+        if v.known:
+            print(f"  {v.qty}x {v.name:<24} {v.total:>10.2f} {base}{marker}")
+        else:
+            print(f"  {v.qty}x {v.name:<24} {'unknown':>10}{marker}")
+    if result.incomplete:
+        print("  (comparison incomplete: an option has no market price)")
+    return 0
+
+
 def cmd_table(args: argparse.Namespace) -> int:
     cached, base = _load_prices(args)
     rows = sorted(cached.table.items(), key=lambda kv: kv[1], reverse=True)
@@ -79,6 +109,10 @@ def build_parser() -> argparse.ArgumentParser:
     pp.add_argument("qty", type=int, help="quantity")
     pp.add_argument("--fuzzy", action="store_true", help="fuzzy-snap a noisy name")
     pp.set_defaults(func=cmd_price)
+
+    pi = sub.add_parser("image", help="appraise rewards from a panel image")
+    pi.add_argument("path", help="path to a screenshot / reward-panel image")
+    pi.set_defaults(func=cmd_image)
 
     pt = sub.add_parser("table", help="dump the price table")
     pt.add_argument("--top", type=int, default=0, help="show only top N by value")

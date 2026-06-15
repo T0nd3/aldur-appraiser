@@ -1,0 +1,63 @@
+"""Tests for parse.py — regex qty extraction + fuzzy name snapping."""
+
+from __future__ import annotations
+
+from aldur_appraiser.parse import parse_row, parse_rows, snap_name
+
+DICT = [
+    "Orb of Augmentation",
+    "Orb of Transmutation",
+    "Divine Orb",
+    "Chaos Orb",
+    "Exalted Orb",
+]
+
+
+def test_parse_clean_row():
+    assert parse_row("1x Orb of Augmentation", DICT) == (1, "Orb of Augmentation")
+
+
+def test_parse_handles_spacing_and_case():
+    assert parse_row("20 X Chaos Orb", DICT) == (20, "Chaos Orb")
+    assert parse_row("3X Divine Orb", DICT) == (3, "Divine Orb")
+
+
+def test_fuzzy_fixes_ocr_slip():
+    # classic italic/serif OCR slip: rn -> m
+    assert parse_row("1x Orb of Augrnentation", DICT) == (1, "Orb of Augmentation")
+
+
+def test_below_cutoff_returns_none():
+    # gibberish name should not snap to anything
+    assert parse_row("1x Zzqwx Blarg", DICT) is None
+
+
+def test_no_quantity_returns_none():
+    assert parse_row("Orb of Augmentation", DICT) is None
+
+
+def test_absurd_quantity_rejected():
+    assert parse_row("999999999x Divine Orb", DICT) is None
+
+
+def test_empty_and_garbage():
+    assert parse_row("", DICT) is None
+    assert parse_row("   ", DICT) is None
+
+
+def test_snap_name_direct():
+    assert snap_name("Divin Orb", DICT) == "Divine Orb"
+    assert snap_name("totally unknown thing", DICT) is None
+
+
+def test_parse_rows_drops_unparseable():
+    rows = [
+        "1x Orb of Augmentation",
+        "garbage line",
+        "2x Divine Orb",
+        "",
+    ]
+    assert parse_rows(rows, DICT) == [
+        (1, "Orb of Augmentation"),
+        (2, "Divine Orb"),
+    ]
