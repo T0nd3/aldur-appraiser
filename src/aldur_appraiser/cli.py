@@ -4,6 +4,7 @@
     appraiser price "divin orb" 3 --fuzzy     # fuzzy-snap a noisy name
     appraiser table --top 15                  # dump the price table
     appraiser image panel.png                 # appraise rewards from an image
+    appraiser run                             # live overlay loop (capture+detect)
     appraiser                                 # no-op (Phase-0 smoke test)
 """
 
@@ -88,6 +89,12 @@ def cmd_image(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_run(args: argparse.Namespace) -> int:
+    from aldur_appraiser.app import run_app
+
+    return run_app(backend=args.backend)
+
+
 def cmd_capture_test(args: argparse.Namespace) -> int:
     import cv2
 
@@ -146,6 +153,10 @@ def build_parser() -> argparse.ArgumentParser:
         help="skip panel detection and OCR the whole frame",
     )
     pi.set_defaults(func=cmd_image)
+
+    pr = sub.add_parser("run", help="live loop: capture + detect + appraise on the console")
+    pr.add_argument("--backend", choices=["portal", "mss"], help="force a capture backend")
+    pr.set_defaults(func=cmd_run)
 
     pc = sub.add_parser("capture-test", help="grab one screen frame (tests the capture backend)")
     pc.add_argument("--backend", choices=["portal", "mss"], help="force a capture backend")

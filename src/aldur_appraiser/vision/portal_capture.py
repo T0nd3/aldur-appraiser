@@ -224,19 +224,28 @@ class PortalScreenCast:
         desc = (
             f"pipewiresrc fd={fd} path={node_id} always-copy=true ! "
             "videoconvert ! video/x-raw,format=BGR ! "
-            "appsink name=sink max-buffers=1 drop=true sync=false"
+            "appsink name=sink max-buffers=1 drop=true sync=false enable-last-sample=true"
         )
         self._pipeline = Gst.parse_launch(desc)
         self._appsink = self._pipeline.get_by_name("sink")
         self._pipeline.set_state(Gst.State.PLAYING)
         # Wait for PLAYING so the first grab has a buffer.
         self._pipeline.get_state(self._Gst.SECOND * 5)
+        # Prime: wait once for the first frame so last-sample is populated.
+        self._appsink.try_pull_sample(self._Gst.SECOND * 5)
 
     def grab(self, region=None) -> np.ndarray:
-        """Pull the most recent frame as BGR; crop to region if given."""
+        """Return the most recent frame as BGR; crop to region if given.
+
+        The portal stream is damage-based: on a static screen no *new* buffers
+        arrive, so we read the appsink's retained last-sample (the current
+        screen) rather than blocking for a fresh one. A short pull keeps it
+        current when the screen is changing.
+        """
         if self._appsink is None:
             raise PortalError("not connected; call connect() first")
-        sample = self._appsink.try_pull_sample(self._Gst.SECOND * 2)
+        fresh = self._appsink.try_pull_sample(self._Gst.MSECOND * 50)
+        sample = fresh or self._appsink.get_property("last-sample")
         if sample is None:
             raise PortalError("no frame available from PipeWire stream")
         frame = self._sample_to_bgr(sample)
