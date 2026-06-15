@@ -88,6 +88,32 @@ def cmd_image(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_capture_test(args: argparse.Namespace) -> int:
+    import cv2
+
+    from aldur_appraiser.vision.capture import default_backend, open_capture
+
+    backend = args.backend or default_backend()
+    print(f"capture backend: {backend}")
+    if backend == "portal":
+        print("A one-time screen-share dialog may appear — pick your game monitor "
+              "and 'Share'. The choice is remembered (restore token).")
+    try:
+        with open_capture(monitor=args.monitor, backend=backend) as cap:
+            frame = cap.grab()
+    except Exception as exc:  # noqa: BLE001 - surface any backend error to the user
+        print(f"capture failed: {type(exc).__name__}: {exc}", file=sys.stderr)
+        return 1
+
+    print(f"grabbed frame: {frame.shape[1]}x{frame.shape[0]} max={int(frame.max())}")
+    if int(frame.max()) == 0:
+        print("frame is all black — capture is not seeing screen content", file=sys.stderr)
+        return 1
+    cv2.imwrite(args.out, frame)
+    print(f"saved {args.out}")
+    return 0
+
+
 def cmd_table(args: argparse.Namespace) -> int:
     cached, base = _load_prices(args)
     rows = sorted(cached.table.items(), key=lambda kv: kv[1], reverse=True)
@@ -120,6 +146,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="skip panel detection and OCR the whole frame",
     )
     pi.set_defaults(func=cmd_image)
+
+    pc = sub.add_parser("capture-test", help="grab one screen frame (tests the capture backend)")
+    pc.add_argument("--backend", choices=["portal", "mss"], help="force a capture backend")
+    pc.add_argument("--monitor", type=int, default=1, help="monitor index (mss backend)")
+    pc.add_argument("--out", default="/tmp/aldur_capture.png", help="where to save the frame")
+    pc.set_defaults(func=cmd_capture_test)
 
     pt = sub.add_parser("table", help="dump the price table")
     pt.add_argument("--top", type=int, default=0, help="show only top N by value")

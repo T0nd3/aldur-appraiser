@@ -11,6 +11,8 @@ BGRA->BGR handling stay unit-testable without a live display.
 
 from __future__ import annotations
 
+import os
+import sys
 from dataclasses import dataclass
 
 import numpy as np
@@ -81,3 +83,24 @@ class ScreenCapture:
 
     def __exit__(self, *exc) -> None:
         self.close()
+
+
+def default_backend() -> str:
+    """'portal' on Linux/Wayland (mss can't read the screen there), else 'mss'."""
+    if sys.platform.startswith("linux") and os.environ.get("WAYLAND_DISPLAY"):
+        return "portal"
+    return "mss"
+
+
+def open_capture(monitor: int = 1, *, backend: str | None = None):
+    """Return a capture backend (use as a context manager).
+
+    Both backends expose grab(region)/assert_capturable()/close() and the
+    context-manager protocol, so callers stay backend-agnostic.
+    """
+    chosen = backend or default_backend()
+    if chosen == "portal":
+        from aldur_appraiser.vision.portal_capture import PortalScreenCast
+
+        return PortalScreenCast()
+    return ScreenCapture(monitor=monitor)

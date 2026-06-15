@@ -23,7 +23,10 @@ from aldur_appraiser.vision.capture import Region
 DEFAULT_TEMPLATE = (
     Path(__file__).resolve().parents[3] / "assets" / "templates" / "header_runeshape.png"
 )
-DEFAULT_THRESHOLD = 0.6
+# Calibrated from a live frame: real panels match ~0.9 (downscaled), a
+# non-game desktop produced a 0.75 false positive, so 0.8 separates them.
+# Re-tune once we have a live panel-open capture.
+DEFAULT_THRESHOLD = 0.8
 
 # Reward ROI as multiples of the matched header box (left=hx, top=hy).
 ROI_TOP_FROM_HEADER_H = 1.0   # start one header-height below the header top
