@@ -76,8 +76,10 @@ class PanelDetector:
             raise FileNotFoundError(f"detection template not found: {path}")
         self._tpl = tpl
         self.threshold = threshold
-        # cover native (1.0) down to the smaller-resolution fixture (~0.67)
-        self.scales = scales if scales is not None else np.linspace(0.55, 1.25, 15)
+        # The template is calibrated at one resolution; multi-scale matching
+        # makes detection resolution-/UI-scale-independent. 0.4-1.7 spans roughly
+        # 1080p (smaller UI) up to 4K (larger UI) relative to the template.
+        self.scales = scales if scales is not None else np.linspace(0.4, 1.7, 27)
         # Match on a downscaled frame for speed; coords are mapped back to full
         # resolution. matchTemplate over a 5120px frame is ~1.5s at full res,
         # ~150ms at 0.4. Set to 1.0 to disable.
