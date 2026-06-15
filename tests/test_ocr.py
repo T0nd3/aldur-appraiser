@@ -67,11 +67,23 @@ def test_pipeline_on_synthetic_panel_ranks_endgame():
     assert result.best is not None and result.best.name == "Chaos Orb"
 
 
-@pytest.mark.skipif(not FIXTURE.exists(), reason="real screenshot fixture not provided yet")
-def test_ocr_reads_real_screenshot():
-    img = cv2.imread(str(FIXTURE))
+# Real fixtures (super-ultrawide 5120x1440 / 3437x1428). The visible currency
+# reward is the bonus "1x Regal Orb"; the two main options are Uncut gems
+# (non-currency, no quantity prefix) which the qty-pattern intentionally skips
+# until Phase-3 row detection. Snap against the full live-style name list, not
+# just the tiny DICT, since these panels contain Regal Orb.
+REAL_NAMES = DICT + ["Regal Orb", "Greater Regal Orb", "Perfect Regal Orb"]
+REAL_FIXTURES = [
+    p for p in (FIXTURE, FIXTURE.with_name("runeshape_02.png")) if p.exists()
+]
+
+
+@pytest.mark.skipif(not REAL_FIXTURES, reason="real screenshot fixtures not provided yet")
+@pytest.mark.parametrize("path", REAL_FIXTURES, ids=lambda p: p.name)
+def test_ocr_isolates_currency_reward_from_full_screenshot(path):
+    img = cv2.imread(str(path))
     assert img is not None
-    options = parse_rows(ocr.read_reward_rows(img), DICT)
-    names = {name for _, name in options}
-    assert "Orb of Augmentation" in names
-    assert "Orb of Transmutation" in names
+    options = parse_rows(ocr.read_reward_rows(img), REAL_NAMES)
+    # Despite quest/chat/UI text on a 5120-wide frame, only the real currency
+    # reward survives the qty-pattern + fuzzy cutoff.
+    assert (1, "Regal Orb") in options
