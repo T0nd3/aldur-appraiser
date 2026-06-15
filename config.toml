@@ -5,9 +5,10 @@
 realm = "poe2"
 league = "Runes of Aldur"   # current league (IsCurrent on poe2scout)
 base = "exalted"            # reference currency; API returns CurrentPrice in this unit
-# Currency categories to pull into the price table. "currency" covers the basic
-# orbs; add more (e.g. for runes/essences) once their reward types appear.
-categories = ["currency"]
+# Currency categories to pull into the price table. Empty = all categories
+# (currency, runes, essences, fragments, …) so reward types like Lesser runes
+# get priced. Set a specific list to limit it, e.g. ["currency", "runes"].
+categories = []
 cache_ttl_minutes = 20      # prices refresh ~hourly; never fetch per frame
 source = "poe2scout"        # primary source; poe.ninja fallback is future work
 

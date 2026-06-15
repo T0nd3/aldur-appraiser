@@ -192,14 +192,16 @@ def run_overlay(*, backend: str | None = None) -> int:
 
     def worker() -> None:
         try:
-            loop = _make_loop(
-                s,
-                on_result=lambda r, anchor: overlay.post_result(r, stale, anchor),
-                on_hide=overlay.post_hide,
-            )
+            # Open capture first so the permission dialog appears promptly,
+            # before the slower OCR-engine init.
             with open_capture(backend=s.backend) as cap:
                 if hasattr(cap, "assert_capturable"):
                     cap.assert_capturable()
+                loop = _make_loop(
+                    s,
+                    on_result=lambda r, anchor: overlay.post_result(r, stale, anchor),
+                    on_hide=overlay.post_hide,
+                )
                 loop.run(cap, poll_fps=s.poll_fps)
         except Exception as exc:  # noqa: BLE001 - surface backend errors, then quit
             print(f"capture error: {type(exc).__name__}: {exc}", file=sys.stderr)

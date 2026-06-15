@@ -65,7 +65,7 @@ def load_config(path: Path | None = None) -> AppConfig:
         realm=p.get("realm", "poe2"),
         league=p.get("league", "Runes of Aldur"),
         base=p.get("base", "exalted"),
-        categories=tuple(p.get("categories", ["currency"])),
+        categories=tuple(p.get("categories", [])),  # empty = all currency categories
         cache_ttl_minutes=int(p.get("cache_ttl_minutes", 20)),
         source=p.get("source", "poe2scout"),
     )

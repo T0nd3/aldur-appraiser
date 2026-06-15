@@ -54,7 +54,9 @@ def test_fetch_price_table_parses_and_adds_base():
         )
     }
     with _mock_client(routes) as client:
-        table = fetch_price_table("Runes of Aldur", "exalted", client=client)
+        table = fetch_price_table(
+            "Runes of Aldur", "exalted", categories=["currency"], client=client
+        )
 
     assert table["Divine Orb"] == 165.0
     assert table["Orb of Augmentation"] == 0.05
@@ -73,7 +75,7 @@ def test_fetch_skips_thin_and_priceless_currency():
         )
     }
     with _mock_client(routes) as client:
-        table = fetch_price_table("L", "exalted", client=client)
+        table = fetch_price_table("L", "exalted", categories=["currency"], client=client)
 
     assert "Divine Orb" in table
     assert "No Market Orb" not in table
@@ -86,7 +88,37 @@ def test_fetch_raises_on_network_error():
 
     with httpx.Client(transport=httpx.MockTransport(boom)) as client:
         with pytest.raises(PricingError):
-            fetch_price_table("L", "exalted", client=client)
+            fetch_price_table("L", "exalted", categories=["currency"], client=client)
+
+
+def test_fetch_all_categories_when_none_given():
+    # no categories -> discover them via Items/Categories, then pull each
+    routes = {
+        "/Items/Categories": {
+            "UniqueCategories": [],
+            "CurrencyCategories": [
+                {"ApiId": "currency", "Label": "Currency"},
+                {"ApiId": "runes", "Label": "Runes"},
+            ],
+        },
+        "Category=currency": _page([_item("Divine Orb", 165.0)]),
+        "Category=runes": _page([_item("Lesser Robust Rune", 15.8)]),
+    }
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        url = str(request.url)
+        if "Items/Categories" in url:
+            return httpx.Response(200, json=routes["/Items/Categories"])
+        for frag in ("Category=currency", "Category=runes"):
+            if frag in url:
+                return httpx.Response(200, json=routes[frag])
+        raise AssertionError(url)
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        table = fetch_price_table("L", "exalted", client=client)
+
+    assert table["Divine Orb"] == 165.0
+    assert table["Lesser Robust Rune"] == 15.8  # runes category now included
 
 
 # --- cache -------------------------------------------------------------------

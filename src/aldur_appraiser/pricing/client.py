@@ -48,6 +48,20 @@ def _get(client: httpx.Client, path: str, params: dict | None = None) -> dict:
         raise PricingError(f"poe2scout request failed: {path}: {exc}") from exc
 
 
+def list_currency_categories(
+    realm: str, league: str, *, client: httpx.Client | None = None
+) -> list[str]:
+    """All currency-category ApiIds for a league (currency, runes, essences, …)."""
+    owns = client is None
+    client = client or httpx.Client(timeout=DEFAULT_TIMEOUT)
+    try:
+        data = _get(client, f"/{realm}/Leagues/{league}/Items/Categories")
+        return [c["ApiId"] for c in data.get("CurrencyCategories", []) if c.get("ApiId")]
+    finally:
+        if owns:
+            client.close()
+
+
 def current_league(realm: str = "poe2", *, client: httpx.Client | None = None) -> str:
     """Return the league name flagged IsCurrent (non-hardcore preferred)."""
     owns = client is None
@@ -94,20 +108,32 @@ def fetch_price_table(
     base: str = "exalted",
     *,
     realm: str = "poe2",
-    categories: Iterable[str] = ("currency",),
+    categories: Iterable[str] | None = None,
     client: httpx.Client | None = None,
 ) -> PriceTable:
     """Build {canonical_name: unit_value_in_base} from poe2scout.
 
     Keys double as the OCR snap-dictionary (canonical currency names).
     Unknown/thin currencies are simply absent -> valued as known=False later.
+
+    With no categories given, pulls *all* currency categories (currency, runes,
+    essences, …) so reward types like Lesser runes get priced too.
     """
     owns = client is None
     client = client or httpx.Client(timeout=DEFAULT_TIMEOUT)
     try:
+        cats = list(categories) if categories else list_currency_categories(
+            realm, league, client=client
+        )
         table: PriceTable = {}
-        for category in categories:
-            for it in _fetch_category(client, realm, league, category, base):
+        fetched_any = False
+        for category in cats:
+            try:
+                items = _fetch_category(client, realm, league, category, base)
+            except PricingError:
+                continue  # skip a bad/unsupported category, keep the rest
+            fetched_any = True
+            for it in items:
                 name = it.get("Text")
                 price = it.get("CurrentPrice")
                 qty = it.get("CurrentQuantity") or 0
@@ -116,8 +142,8 @@ def fetch_price_table(
                 table[name] = float(price)
         # The reference currency itself is worth exactly 1 unit of base.
         table.setdefault(_base_display_name(base), 1.0)
-        if not table:
-            raise PricingError(f"empty price table for league={league!r}")
+        if not fetched_any:
+            raise PricingError(f"could not fetch any category for league={league!r}")
         return table
     finally:
         if owns:

@@ -39,16 +39,16 @@ def result_to_html(result: EvalResult, base: str, *, stale: bool = False) -> str
             rows.append(f"<div style='color:#888'>{v.qty}x {name} &mdash; ?</div>")
 
     if result.incomplete:
-        rows.append("<div style='color:#caa45a;font-size:11px'>comparison incomplete</div>")
+        rows.append("<div style='color:#caa45a;font-size:13px'>comparison incomplete</div>")
     for v in result.bonus_items:
         val = f"{v.total:.1f} {base}" if v.known else "?"
         bname = html.escape(v.name)
         rows.append(
-            "<div style='color:#8a8a8a;font-size:11px'>"
+            "<div style='color:#8a8a8a;font-size:13px'>"
             f"+ bonus: {v.qty}x {bname} &mdash; {val}</div>"
         )
     if stale:
-        rows.append("<div style='color:#caa45a;font-size:11px'>&#9888; stale prices</div>")
+        rows.append("<div style='color:#caa45a;font-size:13px'>&#9888; stale prices</div>")
     return "".join(rows)
 
 
@@ -82,11 +82,12 @@ def build_overlay(base: str, *, position: str = "top-right", opacity: float = 0.
 
             self._label = QLabel(self)
             self._label.setTextFormat(Qt.RichText)
+            self._label.setMinimumWidth(320)
             self._label.setStyleSheet(
                 "QLabel{"
                 f"background:rgba(20,18,14,{int(opacity * 255)});"
-                "color:#e8e8e8;border:1px solid #5a4a2a;border-radius:8px;"
-                "padding:8px 12px;font-family:'DejaVu Sans',sans-serif;font-size:13px;}"
+                "color:#e8e8e8;border:2px solid #5a4a2a;border-radius:10px;"
+                "padding:12px 16px;font-family:'DejaVu Sans',sans-serif;font-size:17px;}"
             )
             lay = QVBoxLayout(self)
             lay.setContentsMargins(0, 0, 0, 0)
