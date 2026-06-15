@@ -24,3 +24,6 @@ env/
 
 # Local config overrides (user config lives in platformdirs config dir)
 config.local.toml
+
+# Local-only test screenshots (not for the public repo)
+assets/fixtures/*.png
