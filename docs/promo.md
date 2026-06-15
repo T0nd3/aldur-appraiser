@@ -1,64 +1,65 @@
 # Promotion drafts
 
-Ready-to-post copy for sharing the tool. Replace `LINK` with the repo/release URL
-and drop in a demo GIF where noted. Keep the read-only / "use at own risk"
-framing — the community (and GGG) care about that.
+Ready-to-post copy. Replace `LINK` with the repo/release URL and attach the demo
+clip where noted. Keep the read-only / disclaimer framing intact.
 
 ---
 
 ## Reddit — r/PathOfExile2 (and r/PathOfExile)
 
 **Title:**
-Aldur Appraiser — a passive overlay that prices Runeshape Combination rewards (read-only, open source)
+Aldur Appraiser — a read-only overlay that values Runeshape Combination rewards (open source)
 
 **Body:**
 
-I kept hesitating at the Ezomyte Remnant's *Runeshape Combinations* panel, not sure which reward
-was actually worth the most. So I built a small tool that prices them for you.
+Aldur Appraiser is an open-source overlay for Path of Exile 2 that values the reward options on
+the Ezomyte Remnant's *Runeshape Combinations* panel.
 
-**What it does:** it watches for the panel, reads the reward options, and shows the value of each
-one **right next to it** — in Exalted/Divine with the currency icon, best choice highlighted. The
-always-paid bonus reward is shown separately (it doesn't affect the choice), and anything it can't
-price is marked `?` rather than guessed.
+It detects the panel, reads the offered rewards via OCR, prices them against poe2scout, and shows
+each option's value inline — in Exalted or Divine with the matching currency icon — with the most
+valuable choice highlighted. The always-paid bonus reward is reported separately so it does not
+affect the comparison, and any reward that cannot be priced is shown as `?` rather than estimated.
 
-*(demo GIF here)*
+*(attach the demo clip here)*
 
-**How it works / safety:** it's **read-only** — just screen capture + OCR, drawing its own overlay
-on top. No clipboard, no simulated input, no memory reading, no interaction with the game client.
-It runs in the system tray. Prices come from poe2scout.
+**Design and safety.** The tool is strictly read-only: it captures the screen and draws its own
+overlay. It does not use the clipboard, simulate input, read process memory, or interact with the
+game client in any way. It runs in the system tray and sources prices from poe2scout.
 
-**Get it:** download a one-file build for **Windows** or **macOS** from the releases page (Linux:
-a setup script). First launch shows the usual unsigned-app prompt (SmartScreen → *More info* →
-*Run anyway*; macOS → right-click → *Open*). Run PoE2 in borderless/windowed fullscreen.
+**Availability.** Single-file builds for Windows and macOS are on the releases page; Linux uses a
+setup script. The binaries are unsigned, so the first launch shows the standard OS prompt (Windows
+SmartScreen → *More info* → *Run anyway*; macOS → right-click → *Open*). Run the game in
+borderless/windowed fullscreen.
 
-It's open source — feedback, issues and PRs welcome: **LINK**
+Source and downloads: **LINK**
 
-⚠️ Use at your own risk: there's no official endorsement, and GGG's third-party policy is strict
-about automation. I built it to be passive/read-only specifically to stay on the safe side, but I
-can't make any guarantees — decide for yourself.
+**Disclaimer.** This is an unofficial, third-party tool with no endorsement from GGG, whose policy
+on third-party software is restrictive. It was deliberately built to be passive and read-only to
+minimise risk, but no guarantees can be made — use it at your own discretion.
 
 ---
 
 ## Official forum — Third-Party Tools / Development
 
-**Title:** Aldur Appraiser — passive read-only reward-valuation overlay for the Runeshape panel
+**Title:** Aldur Appraiser — read-only reward-valuation overlay for the Runeshape Combinations panel
 
-Hi all — sharing a small open-source tool I made for the *Runeshape Combinations* panel.
+Aldur Appraiser is an open-source overlay for the Ezomyte Remnant's *Runeshape Combinations* panel.
 
-It detects the panel via screen capture, OCRs the reward options, prices them against poe2scout,
-and renders an inline overlay showing each option's value (Exalted/Divine, with the currency icon)
-plus the best pick. The always-paid bonus reward is excluded from the ranking; unpriceable rewards
-are shown as `?` rather than guessed; hover tooltips are filtered out.
+It detects the panel through screen capture, reads the reward options via OCR, prices them against
+poe2scout, and renders an inline overlay showing each option's value (Exalted/Divine with the
+currency icon) and the best pick. The always-paid bonus reward is excluded from the ranking,
+rewards that cannot be priced are marked `?` rather than estimated, and transient hover tooltips
+are filtered out.
 
-Design notes for the curious:
-- **Strictly read-only:** screen capture + OCR + an overlay window. No clipboard use, no input
-  injection, no process/memory access — the same one-direction "read the screen" approach as some
-  existing price-check tools, minus the clipboard step.
-- Cross-platform: Windows/macOS use a screen-grab API directly; on Linux/Wayland it goes through
-  the xdg-desktop-portal screencast (with a one-time permission prompt).
-- System-tray app; built-in update check; English client.
+Implementation notes:
+
+- **Strictly read-only.** Screen capture, OCR, and an overlay window only — no clipboard use, no
+  input injection, no process or memory access.
+- **Cross-platform.** Windows and macOS use a direct screen-grab API; on Linux/Wayland capture
+  goes through the xdg-desktop-portal screencast (one-time permission prompt).
+- System-tray application with a built-in update check. English client.
 
 Binaries (Windows/macOS) and source: **LINK**
 
-Use at your own risk — this is unofficial, with no endorsement from GGG. I'd appreciate any
-feedback, especially on detection across resolutions and edge-case panels.
+This is unofficial software with no endorsement from GGG; use it at your own discretion. Feedback
+is welcome, particularly on panel detection across resolutions and uncommon reward layouts.
