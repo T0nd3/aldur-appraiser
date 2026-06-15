@@ -78,7 +78,7 @@ def build_inline_overlay(base: str, *, icon_paths=None, divine_rate=None):
     BEST = QColor("#7CFC8A")
     KNOWN = QColor("#e8e8e8")
     DIM = QColor("#9a9a9a")
-    ICON_H = 20
+    ICON_H = 30
 
     class InlineOverlay(QWidget):
         _show = Signal(object, object)
@@ -103,7 +103,7 @@ def build_inline_overlay(base: str, *, icon_paths=None, divine_rate=None):
             self.setAttribute(Qt.WA_ShowWithoutActivating, True)
             self.setWindowFlag(Qt.WindowTransparentForInput, True)
             self._font = QFont("DejaVu Sans")
-            self._font.setPixelSize(18)
+            self._font.setPixelSize(22)
             self._font.setBold(True)
             self._show.connect(self._apply_show)
             self._hide.connect(self._apply_hide)
@@ -135,10 +135,9 @@ def build_inline_overlay(base: str, *, icon_paths=None, divine_rate=None):
                 if v.known:
                     val, unit = format_value(v.total, self.divine_rate, base_unit=self.base)
                     icon = self._icons.get(unit)
-                    num = f"{val:.1f}"
-                    label = (f"+{num}" if v.is_bonus else num) if icon else (
-                        f"+{num} {unit}" if v.is_bonus else f"{num} {unit}"
-                    )
+                    # show the value with the unit name (plus the icon if available)
+                    num = f"{val:.1f} {unit}"
+                    label = f"+{num}" if v.is_bonus else num
                     color = DIM if v.is_bonus else (BEST if v.is_best else KNOWN)
                 else:
                     label, color, icon = "?", DIM, None

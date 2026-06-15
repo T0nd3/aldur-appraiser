@@ -123,7 +123,7 @@ def cmd_run(args: argparse.Namespace) -> int:
     from aldur_appraiser.app import run_app
 
     mode = "console" if args.console else ("overlay" if args.overlay else "auto")
-    style = "inline" if args.inline else "corner"
+    style = "corner" if args.corner else "inline"  # inline is the default
     return run_app(backend=args.backend, mode=mode, style=style, refresh=args.refresh)
 
 
@@ -195,10 +195,12 @@ def build_parser() -> argparse.ArgumentParser:
     grp = pr.add_mutually_exclusive_group()
     grp.add_argument("--overlay", action="store_true", help="force the Qt overlay HUD")
     grp.add_argument("--console", action="store_true", help="force plain console output")
-    pr.add_argument(
-        "--inline",
-        action="store_true",
-        help="inline per-row value chips next to the panel (instead of a corner HUD)",
+    sgrp = pr.add_mutually_exclusive_group()
+    sgrp.add_argument(
+        "--inline", action="store_true", help="inline per-row value chips (default)"
+    )
+    sgrp.add_argument(
+        "--corner", action="store_true", help="corner HUD list instead of inline chips"
     )
     pr.add_argument(
         "--refresh", action="store_true", help="force a fresh price fetch (ignore cache)"
