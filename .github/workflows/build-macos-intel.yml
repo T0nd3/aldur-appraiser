@@ -1,0 +1,33 @@
+name: build-macos-intel
+
+# Separate, on-demand Intel (x86_64) macOS build. Kept out of the main
+# build-binaries / release path because the macos-13 runner queues for ages and
+# Intel Macs are a small group. Run manually from the Actions tab when needed;
+# the binary is uploaded as an artifact (not attached to releases).
+on:
+  workflow_dispatch:
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  build:
+    runs-on: macos-13   # Intel
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install package + build deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[vision,overlay,build]"
+      - name: Build binary
+        run: pyinstaller --noconfirm aldur-appraiser.spec
+      - name: Smoke-test
+        run: ./dist/aldur-appraiser selftest
+      - uses: actions/upload-artifact@v4
+        with:
+          name: aldur-appraiser-macos-intel
+          path: dist/aldur-appraiser

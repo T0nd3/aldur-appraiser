@@ -28,9 +28,6 @@ jobs:
           - os: macos-latest          # Apple Silicon (arm64)
             binary: aldur-appraiser
             artifact: aldur-appraiser-macos-arm64
-          - os: macos-13              # Intel (x86_64)
-            binary: aldur-appraiser
-            artifact: aldur-appraiser-macos-intel
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
