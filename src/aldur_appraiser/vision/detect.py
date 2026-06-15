@@ -84,20 +84,18 @@ class PanelDetector:
         # resolution. matchTemplate over a 5120px frame is ~1.5s at full res,
         # ~150ms at 0.4. Set to 1.0 to disable.
         self.detect_downscale = detect_downscale
+        # Scale-locking: the matching scale is a property of the resolution/UI,
+        # so once found we first re-check a narrow band around it (fast) and only
+        # fall back to the full sweep if that misses (e.g. resolution changed).
+        self._locked_scale: float | None = None
+        self._lock_band = 0.12
 
-    def find_panel(self, frame: np.ndarray) -> PanelBox | None:
-        """Return the best header match above threshold, else None."""
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY) if frame.ndim == 3 else frame
+    def _best_match(self, small: np.ndarray, scales) -> PanelBox | None:
+        """Best header match over the given scales (no threshold applied)."""
         d = self.detect_downscale
-        if d != 1.0:
-            small = cv2.resize(gray, None, fx=d, fy=d, interpolation=cv2.INTER_AREA)
-        else:
-            small = gray
         th, tw = self._tpl.shape[:2]
-
         best: PanelBox | None = None
-        for scale in self.scales:
-            # template size in the (downscaled) search frame
+        for scale in scales:
             sw, sh = int(tw * scale * d), int(th * scale * d)
             if sw < 8 or sh < 8 or sw > small.shape[1] or sh > small.shape[0]:
                 continue
@@ -107,16 +105,36 @@ class PanelDetector:
             if not np.isfinite(max_val):  # uniform region -> NaN
                 continue
             if best is None or max_val > best.confidence:
-                # map location + size back to full resolution
                 best = PanelBox(
                     x=int(max_loc[0] / d), y=int(max_loc[1] / d),
                     w=int(tw * scale), h=int(th * scale),
                     scale=float(scale), confidence=float(max_val),
                 )
-
-        if best is None or best.confidence < self.threshold:
-            return None
         return best
+
+    def find_panel(self, frame: np.ndarray) -> PanelBox | None:
+        """Return the best header match above threshold, else None."""
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY) if frame.ndim == 3 else frame
+        d = self.detect_downscale
+        if d != 1.0:
+            small = cv2.resize(gray, None, fx=d, fy=d, interpolation=cv2.INTER_AREA)
+        else:
+            small = gray
+
+        # Fast path: re-check only the band around the locked scale.
+        if self._locked_scale is not None:
+            band = [s for s in self.scales if abs(s - self._locked_scale) <= self._lock_band]
+            box = self._best_match(small, band)
+            if box is not None and box.confidence >= self.threshold:
+                self._locked_scale = box.scale
+                return box
+
+        # Full sweep (first detection, or after a band miss).
+        box = self._best_match(small, self.scales)
+        if box is not None and box.confidence >= self.threshold:
+            self._locked_scale = box.scale
+            return box
+        return None  # keep any existing lock: a closed panel doesn't change scale
 
     def reward_image(self, frame: np.ndarray, panel: PanelBox) -> np.ndarray:
         roi = _clamp_roi(panel.reward_roi(), frame.shape)

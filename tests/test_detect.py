@@ -75,6 +75,18 @@ def test_no_panel_in_noise():
 
 
 @pytest.mark.skipif(not FIXTURES, reason="real fixtures not present")
+def test_scale_lock_set_and_self_corrects():
+    det = PanelDetector()
+    img = cv2.imread(str(FIXTURES[0]))
+    assert det.find_panel(img) is not None
+    assert det._locked_scale is not None     # lock established on first detect
+    assert det.find_panel(img) is not None    # fast band path still detects
+    det._locked_scale = 0.45                  # stale/wrong lock
+    assert det.find_panel(img) is not None    # full-sweep fallback recovers
+    assert det._locked_scale != 0.45          # relocked to the real scale
+
+
+@pytest.mark.skipif(not FIXTURES, reason="real fixtures not present")
 @pytest.mark.parametrize("path", FIXTURES, ids=lambda p: p.name)
 def test_detects_panel_in_fixture(path):
     det = PanelDetector()
