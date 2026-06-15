@@ -57,6 +57,19 @@ def _token_path() -> Path:
     return config_dir() / "screencast_restore_token"
 
 
+def _restore_disabled_path() -> Path:
+    return config_dir() / "screencast_no_restore"
+
+
+def _restore_disabled() -> bool:
+    """True once we've learned that restore tokens stall on this compositor."""
+    return _restore_disabled_path().exists()
+
+
+def _disable_restore() -> None:
+    _restore_disabled_path().write_text("1", encoding="utf-8")
+
+
 def _read_restore_token() -> str | None:
     p = _token_path()
     return p.read_text(encoding="utf-8").strip() if p.exists() else None
@@ -179,13 +192,15 @@ class PortalScreenCast:
 
     def connect(self) -> None:
         """Run (or restore) the portal session and start the PipeWire pipeline."""
+        # Skip the restore token entirely once we've learned it stalls here
+        # (KDE) — avoids a doomed ~3s attempt and a delayed dialog every run.
+        token = None if _restore_disabled() else _read_restore_token()
         try:
-            self._handshake(_read_restore_token())
+            self._handshake(token)
         except PortalError as exc:
-            # A stale/invalid restore token can hang or fail; drop it and prompt
-            # the user fresh exactly once.
-            if _read_restore_token() is not None:
-                _debug(f"handshake with restore token failed ({exc}); retrying fresh")
+            if token is not None:
+                _debug(f"restore token failed ({exc}); disabling restore + retrying fresh")
+                _disable_restore()
                 _token_path().unlink(missing_ok=True)
                 self._reset_session()
                 self._handshake(None)
@@ -225,7 +240,7 @@ class PortalScreenCast:
         start_res = self._request(
             "Start", (self._session_handle, ""), {}, timeout_s=180
         )
-        if start_res.get("restore_token"):
+        if start_res.get("restore_token") and not _restore_disabled():
             _write_restore_token(start_res["restore_token"])
 
         streams = start_res.get("streams") or []
