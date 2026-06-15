@@ -16,6 +16,10 @@ from pathlib import Path
 from aldur_appraiser.config import cache_dir
 from aldur_appraiser.pricing.client import PriceTable, PricingError, fetch_price_table
 
+# Bump when the table's shape/coverage changes (e.g. currency-only -> all
+# categories) so older on-disk caches are ignored instead of served stale.
+CACHE_VERSION = 2
+
 
 @dataclass(frozen=True)
 class CachedPrices:
@@ -38,6 +42,8 @@ def _read(path: Path) -> tuple[PriceTable, float] | None:
         return None
     try:
         raw = json.loads(path.read_text(encoding="utf-8"))
+        if raw.get("version") != CACHE_VERSION:
+            return None  # stale schema (e.g. pre-all-categories) -> refetch
         return raw["table"], float(raw["fetched_at"])
     except (json.JSONDecodeError, KeyError, OSError, ValueError):
         return None
@@ -46,7 +52,8 @@ def _read(path: Path) -> tuple[PriceTable, float] | None:
 def _write(path: Path, table: PriceTable, fetched_at: float) -> None:
     tmp = path.with_suffix(".tmp")
     tmp.write_text(
-        json.dumps({"table": table, "fetched_at": fetched_at}), encoding="utf-8"
+        json.dumps({"version": CACHE_VERSION, "table": table, "fetched_at": fetched_at}),
+        encoding="utf-8",
     )
     tmp.replace(path)  # atomic on both POSIX and Windows
 

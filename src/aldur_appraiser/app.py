@@ -120,7 +120,7 @@ class _Setup:
     backend: str
 
 
-def _prepare(backend: str | None) -> _Setup:
+def _prepare(backend: str | None, *, refresh: bool = False) -> _Setup:
     from aldur_appraiser.config import load_config
     from aldur_appraiser.pricing.cache import get_or_fetch
     from aldur_appraiser.vision.capture import default_backend
@@ -130,7 +130,7 @@ def _prepare(backend: str | None) -> _Setup:
     cached = get_or_fetch(
         pc.league,
         pc.base,
-        ttl_minutes=pc.cache_ttl_minutes,
+        ttl_minutes=0 if refresh else pc.cache_ttl_minutes,
         realm=pc.realm,
         categories=pc.categories,
     )
@@ -148,10 +148,10 @@ def _make_loop(s: _Setup, on_result, on_hide) -> AppraiserLoop:
     )
 
 
-def run_console(*, backend: str | None = None) -> int:
+def run_console(*, backend: str | None = None, refresh: bool = False) -> int:
     from aldur_appraiser.vision.capture import open_capture
 
-    s = _prepare(backend)
+    s = _prepare(backend, refresh=refresh)
 
     def _print(appraisal):
         print(render_console(appraisal.result, base=s.pc.base, stale=s.cached.stale) + "\n")
@@ -169,7 +169,7 @@ def run_console(*, backend: str | None = None) -> int:
     return 0
 
 
-def run_overlay(*, backend: str | None = None, style: str = "corner") -> int:
+def run_overlay(*, backend: str | None = None, style: str = "corner", refresh: bool = False) -> int:
     import os
     import signal
     import threading
@@ -185,7 +185,7 @@ def run_overlay(*, backend: str | None = None, style: str = "corner") -> int:
     from aldur_appraiser.vision.capture import open_capture
     from aldur_appraiser.vision.overlay import build_inline_overlay, build_overlay
 
-    s = _prepare(backend)
+    s = _prepare(backend, refresh=refresh)
     app = QApplication([])
     stale = s.cached.stale
 
@@ -221,10 +221,12 @@ def run_overlay(*, backend: str | None = None, style: str = "corner") -> int:
     return app.exec()
 
 
-def run_app(*, backend: str | None = None, mode: str = "auto", style: str = "corner") -> int:
+def run_app(
+    *, backend: str | None = None, mode: str = "auto", style: str = "corner", refresh: bool = False
+) -> int:
     """Entry point for `appraiser run`. mode: auto | overlay | console."""
     if mode == "console":
-        return run_console(backend=backend)
+        return run_console(backend=backend, refresh=refresh)
     try:
         import PySide6  # noqa: F401
     except ImportError:
@@ -233,5 +235,5 @@ def run_app(*, backend: str | None = None, mode: str = "auto", style: str = "cor
                   '(pip install -e ".[overlay]")', file=sys.stderr)
             return 1
         print("overlay unavailable (PySide6 not installed); using console.\n")
-        return run_console(backend=backend)
-    return run_overlay(backend=backend, style=style)
+        return run_console(backend=backend, refresh=refresh)
+    return run_overlay(backend=backend, style=style, refresh=refresh)

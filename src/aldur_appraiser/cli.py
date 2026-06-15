@@ -113,7 +113,7 @@ def cmd_run(args: argparse.Namespace) -> int:
 
     mode = "console" if args.console else ("overlay" if args.overlay else "auto")
     style = "inline" if args.inline else "corner"
-    return run_app(backend=args.backend, mode=mode, style=style)
+    return run_app(backend=args.backend, mode=mode, style=style, refresh=args.refresh)
 
 
 def cmd_capture_test(args: argparse.Namespace) -> int:
@@ -188,6 +188,9 @@ def build_parser() -> argparse.ArgumentParser:
         "--inline",
         action="store_true",
         help="inline per-row value chips next to the panel (instead of a corner HUD)",
+    )
+    pr.add_argument(
+        "--refresh", action="store_true", help="force a fresh price fetch (ignore cache)"
     )
     pr.set_defaults(func=cmd_run)
 

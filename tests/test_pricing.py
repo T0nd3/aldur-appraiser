@@ -164,6 +164,24 @@ def test_cache_falls_back_to_stale_on_error(tmp_path, monkeypatch):
     assert res.table["Divine Orb"] == 1.0
 
 
+def test_cache_ignores_old_version(tmp_path, monkeypatch):
+    monkeypatch.setattr(cache_mod, "cache_dir", lambda: tmp_path)
+    # a legacy cache file (no version field), timestamped in the future so TTL
+    # alone would treat it as fresh
+    legacy = cache_mod._cache_file("L", "exalted")
+    legacy.write_text('{"table": {"Old Orb": 1.0}, "fetched_at": 1.0e12}', encoding="utf-8")
+
+    calls = {"n": 0}
+
+    def fetcher(*a, **k):
+        calls["n"] += 1
+        return {"New Orb": 2.0}
+
+    res = cache_mod.get_or_fetch("L", "exalted", fetcher=fetcher)
+    assert calls["n"] == 1               # old-version cache ignored -> refetched
+    assert res.table == {"New Orb": 2.0}
+
+
 def test_cache_raises_when_no_fallback(tmp_path, monkeypatch):
     monkeypatch.setattr(cache_mod, "cache_dir", lambda: tmp_path)
 
