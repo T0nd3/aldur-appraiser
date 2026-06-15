@@ -260,10 +260,11 @@ def run_overlay(*, backend: str | None = None, style: str = "corner", refresh: b
             _notify(f"Update {latest} verfügbar — klicken zum Öffnen.", info)
             menu = tray.contextMenu()
             if menu is not None and not added["done"]:
-                act = QAction(f"Update {latest} herunterladen")
+                act = QAction(f"Update {latest} herunterladen", menu)
                 act.triggered.connect(lambda: QDesktopServices.openUrl(QUrl(updates.RELEASES_PAGE)))
                 menu.insertAction(menu.actions()[-1], act)  # above "Beenden"
                 added["done"] = True
+                added["action"] = act  # keep a reference alive
 
         bridge.update.connect(_on_update)
         tray.messageClicked.connect(
@@ -301,7 +302,7 @@ def run_overlay(*, backend: str | None = None, style: str = "corner", refresh: b
 
 def _make_tray(app, setup, icon_path, on_check):
     """System-tray icon with a right-click menu (check updates, quit)."""
-    from PySide6.QtGui import QAction, QColor, QIcon, QPainter, QPixmap
+    from PySide6.QtGui import QAction, QColor, QCursor, QIcon, QPainter, QPixmap
     from PySide6.QtWidgets import QMenu, QSystemTrayIcon
 
     from aldur_appraiser import __version__
@@ -325,18 +326,29 @@ def _make_tray(app, setup, icon_path, on_check):
     tray = QSystemTrayIcon(icon)
     tray.setToolTip(f"Aldur Appraiser — {setup.pc.league}")
     menu = QMenu()
-    title = QAction(f"Aldur Appraiser v{__version__}")
+    title = QAction(f"Aldur Appraiser v{__version__}", menu)
     title.setEnabled(False)
     menu.addAction(title)
     menu.addSeparator()
-    check_action = QAction("Nach Updates suchen")
+    check_action = QAction("Nach Updates suchen", menu)
     check_action.triggered.connect(on_check)
     menu.addAction(check_action)
     menu.addSeparator()
-    quit_action = QAction("Beenden")
+    quit_action = QAction("Beenden", menu)
     quit_action.triggered.connect(app.quit)
     menu.addAction(quit_action)
     tray.setContextMenu(menu)
+
+    # Keep Python refs alive (setContextMenu doesn't take ownership -> the menu
+    # would be garbage-collected and no menu shows on right-click).
+    tray._menu = menu
+    # Fallback: also pop the menu on left-click, in case the compositor's tray
+    # host doesn't surface the right-click context menu.
+    tray.activated.connect(
+        lambda reason: menu.popup(QCursor.pos())
+        if reason == QSystemTrayIcon.ActivationReason.Trigger
+        else None
+    )
     tray.show()
     return tray
 
