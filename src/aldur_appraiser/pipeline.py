@@ -60,6 +60,22 @@ def _is_ui_label(text: str) -> bool:
     return fuzz.ratio(text.lower(), "runeshape combinations") >= 80
 
 
+def right_aligned_lines(lines: list[OcrLine], roi_width: int, *, tol_frac: float = 0.12):
+    """Keep only lines flush with the reward column's right margin.
+
+    Reward names are right-aligned to a consistent edge; hover tooltips (rune
+    modifier popups) sit further left, so dropping lines whose right edge is well
+    left of the dominant margin removes tooltip text without touching rewards.
+    Lines without a box (e.g. test fakes) are kept.
+    """
+    boxed = [ln for ln in lines if ln.box is not None]
+    if len(boxed) < 2:
+        return lines
+    right = max(ln.box[2] for ln in boxed)
+    tol = tol_frac * roi_width
+    return [ln for ln in lines if ln.box is None or ln.box[2] >= right - tol]
+
+
 def split_bonus(lines: list[OcrLine]) -> tuple[list[OcrLine], list[OcrLine]]:
     """Split reward rows into (choices, bonus).
 
@@ -96,6 +112,7 @@ def appraise_roi_rows(
     for appraise_roi()."""
     engine = engine or get_engine()
     lines = [ln for ln in engine.lines(roi) if ln.text and not _is_ui_label(ln.text)]
+    lines = right_aligned_lines(lines, roi.shape[1])
     choice_lines, bonus_lines = split_bonus(lines)
     keys = list(prices.keys())
 

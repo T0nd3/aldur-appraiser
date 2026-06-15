@@ -89,6 +89,21 @@ def test_split_bonus_by_gap():
     assert len(choices) == 3
 
 
+def test_right_aligned_lines_drops_tooltip():
+    from aldur_appraiser.pipeline import right_aligned_lines
+
+    lines = [
+        OcrLine("1x Lesser Ward Rune", 0.9, 12, (248, 12, 462, 30)),
+        OcrLine("Cannot be Shocked or Chilled", 0.9, 147, (2, 147, 246, 165)),
+        OcrLine("All Damage can Shock and Chill", 0.9, 175, (2, 175, 269, 193)),
+        OcrLine("1x Artificer's Orb", 0.9, 136, (288, 136, 461, 156)),
+    ]
+    texts = [ln.text for ln in right_aligned_lines(lines, 520)]
+    assert "1x Lesser Ward Rune" in texts and "1x Artificer's Orb" in texts
+    assert "Cannot be Shocked or Chilled" not in texts
+    assert "All Damage can Shock and Chill" not in texts
+
+
 def test_split_bonus_none_when_even():
     from aldur_appraiser.pipeline import split_bonus
 

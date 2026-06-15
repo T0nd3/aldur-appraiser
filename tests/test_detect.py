@@ -26,6 +26,7 @@ FIXTURES = [
 REGAL_FIXTURES = [p for p in FIXTURES if p.name in {"runeshape_01.png", "runeshape_02.png"}]
 RUNE_FIXTURE = FIXDIR / "runeshape_03.png"
 NOBONUS_FIXTURE = FIXDIR / "runeshape_04.png"
+TOOLTIP_FIXTURE = FIXDIR / "runeshape_06.png"
 
 
 # --- capture helpers (no live display needed) --------------------------------
@@ -134,3 +135,24 @@ def test_qtyless_choice_kept_and_no_false_bonus():
     assert len(result.items) == 3            # qty-less gem retained, not dropped
     assert result.bonus_items == []          # even spacing -> no bonus invented
     assert any("Uncut Support Gem" in v.name for v in result.items)
+
+
+@pytest.mark.skipif(not TOOLTIP_FIXTURE.exists(), reason="tooltip fixture not present")
+def test_hover_tooltip_text_excluded():
+    pytest.importorskip("rapidocr_onnxruntime")
+    from aldur_appraiser.pipeline import appraise_roi_rows
+
+    det = PanelDetector()
+    img = cv2.imread(str(TOOLTIP_FIXTURE))
+    roi = det.reward_image(img, det.find_panel(img))
+    prices = {
+        "Lesser Ward Rune": 1.0,
+        "Lesser Mind Rune": 0.1,
+        "Artificer's Orb": 0.5,
+        "Orb of Alchemy": 0.5,
+    }
+    names = [r.valuation.name for r in appraise_roi_rows(roi, prices)]
+    # a rune-modifier tooltip ("Tempest Rune", "...Shocked or Chilled") overlaps
+    # the panel; its right-misaligned text must not become an option
+    assert any("Ward" in n for n in names) and any("Mind" in n for n in names)
+    assert not any(w in n for n in names for w in ("Shock", "Chill", "Tempest", "gain"))
