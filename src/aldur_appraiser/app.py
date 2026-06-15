@@ -187,26 +187,41 @@ def run_overlay(*, backend: str | None = None, style: str = "corner", refresh: b
     if sys.platform.startswith("linux") and os.environ.get("WAYLAND_DISPLAY"):
         os.environ.setdefault("QT_QPA_PLATFORM", "xcb")
 
-    from PySide6.QtCore import QTimer
+    from PySide6.QtCore import QObject, QTimer, Signal
     from PySide6.QtWidgets import QApplication
 
+    from aldur_appraiser.icons import base_icon_path, currency_icon_paths
     from aldur_appraiser.vision.capture import open_capture
     from aldur_appraiser.vision.overlay import build_inline_overlay, build_overlay
 
     s = _prepare(backend, refresh=refresh)
     app = QApplication([])
+    app.setQuitOnLastWindowClosed(False)  # live in the tray, not tied to a window
     stale = s.cached.stale
     dr = divine_rate(s.cached.table)
 
+    tray_icon_path = None
     if style == "inline":
-        from aldur_appraiser.icons import currency_icon_paths
-
         icons = currency_icon_paths(s.pc.realm, s.pc.league)  # {exalted,divine} best-effort
+        tray_icon_path = icons.get("exalted")
         overlay = build_inline_overlay(s.pc.base, icon_paths=icons, divine_rate=dr)
         on_result = lambda a: overlay.post_rows(a.rows, a.anchor)  # noqa: E731
     else:
+        tray_icon_path = base_icon_path(s.pc.realm, s.pc.league)
         overlay = build_overlay(s.pc.base)
         on_result = lambda a: overlay.post_result(a.result, stale, a.anchor, dr)  # noqa: E731
+
+    tray = _make_tray(app, s, tray_icon_path)
+
+    # Bridge worker-thread errors to the GUI thread (tray notification).
+    class _Bridge(QObject):
+        error = Signal(str)
+
+    bridge = _Bridge()
+    if tray is not None:
+        bridge.error.connect(
+            lambda msg: tray.showMessage("Aldur Appraiser", msg, tray.MessageIcon.Critical, 10000)
+        )
 
     def worker() -> None:
         try:
@@ -217,20 +232,57 @@ def run_overlay(*, backend: str | None = None, style: str = "corner", refresh: b
                     cap.assert_capturable()
                 loop = _make_loop(s, on_result=on_result, on_hide=overlay.post_hide)
                 loop.run(cap, poll_fps=s.poll_fps)
-        except Exception as exc:  # noqa: BLE001 - surface backend errors, then quit
-            print(f"capture error: {type(exc).__name__}: {exc}", file=sys.stderr)
-            app.quit()
+        except Exception as exc:  # noqa: BLE001 - surface backend errors to the tray
+            msg = f"{type(exc).__name__}: {exc}"
+            print(f"capture error: {msg}", file=sys.stderr)
+            bridge.error.emit(msg)  # keep running so the user sees it and can Quit
 
     threading.Thread(target=worker, daemon=True).start()
 
-    print(f"aldur-appraiser overlay running (backend={s.backend}, league={s.pc.league}).")
-    print("Open a Runeshape Combinations panel in-game. Ctrl+C to stop.")
+    print(f"aldur-appraiser running in the tray (backend={s.backend}, league={s.pc.league}).")
+    print("Open a Runeshape Combinations panel in-game. Right-click the tray icon to quit.")
     # Let Python process SIGINT while the Qt event loop runs.
     signal.signal(signal.SIGINT, lambda *_: app.quit())
     timer = QTimer()
     timer.start(200)
     timer.timeout.connect(lambda: None)
     return app.exec()
+
+
+def _make_tray(app, setup, icon_path):
+    """System-tray icon with a right-click menu (Quit). None if unavailable."""
+    from PySide6.QtGui import QAction, QColor, QIcon, QPainter, QPixmap
+    from PySide6.QtWidgets import QMenu, QSystemTrayIcon
+
+    if not QSystemTrayIcon.isSystemTrayAvailable():
+        return None
+
+    if icon_path is not None:
+        icon = QIcon(str(icon_path))
+    else:  # fallback: a simple gold disc
+        pm = QPixmap(32, 32)
+        pm.fill(QColor(0, 0, 0, 0))
+        p = QPainter(pm)
+        p.setRenderHint(QPainter.Antialiasing)
+        p.setBrush(QColor("#d9c89a"))
+        p.setPen(QColor("#5a4a2a"))
+        p.drawEllipse(3, 3, 26, 26)
+        p.end()
+        icon = QIcon(pm)
+
+    tray = QSystemTrayIcon(icon)
+    tray.setToolTip(f"Aldur Appraiser — {setup.pc.league}")
+    menu = QMenu()
+    title = QAction("Aldur Appraiser")
+    title.setEnabled(False)
+    menu.addAction(title)
+    menu.addSeparator()
+    quit_action = QAction("Beenden")
+    quit_action.triggered.connect(app.quit)
+    menu.addAction(quit_action)
+    tray.setContextMenu(menu)
+    tray.show()
+    return tray
 
 
 def run_app(

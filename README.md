@@ -65,9 +65,9 @@ pip install -e ".[tesseract]"       # optional OCR fallback (needs the tesseract
 ## Usage
 
 ```bash
-appraiser run                       # live overlay: per-row value chips next to each option (default)
+appraiser run                       # runs in the system tray; per-row value chips overlay (default)
 appraiser run --corner              # corner HUD list instead of inline chips
-appraiser run --console             # plain console output instead of an overlay
+appraiser run --console             # plain console output, no tray/overlay
 appraiser table --top 15            # dump the live price table
 appraiser price "Divine Orb" 3      # value a single reward option
 appraiser price "divin orb" 3 --fuzzy
