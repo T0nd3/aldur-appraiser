@@ -65,10 +65,12 @@ def test_keep_unknown_retains_real_reward_rows():
     assert parse_row("1x Lesser Storm Rune", DICT) is None
 
 
-def test_keep_unknown_still_needs_qty_pattern():
-    # non-reward lines without a quantity are dropped even in keep_unknown mode
-    assert parse_row("Bonus Reward", DICT, keep_unknown=True) is None
-    assert parse_row("Runeshape Combinations", DICT, keep_unknown=True) is None
+def test_keep_unknown_keeps_qtyless_reward():
+    # inside the ROI a reward without a quantity prefix (e.g. a gem) is qty 1,
+    # not dropped (UI labels are filtered out at the pipeline level instead)
+    assert parse_row("Uncut Support Gem", DICT, keep_unknown=True) == (1, "Uncut Support Gem")
+    # full-frame mode still requires the "Nx" anchor as a noise filter
+    assert parse_row("Uncut Support Gem", DICT) is None
 
 
 def test_parse_rows_drops_unparseable():

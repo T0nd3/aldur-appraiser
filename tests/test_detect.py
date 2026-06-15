@@ -25,6 +25,7 @@ FIXTURES = [
 ]
 REGAL_FIXTURES = [p for p in FIXTURES if p.name in {"runeshape_01.png", "runeshape_02.png"}]
 RUNE_FIXTURE = FIXDIR / "runeshape_03.png"
+NOBONUS_FIXTURE = FIXDIR / "runeshape_04.png"
 
 
 # --- capture helpers (no live display needed) --------------------------------
@@ -117,3 +118,19 @@ def test_roi_keeps_unknown_runes_and_finds_bonus_orb():
     qtys_names = {name for _, name in options}
     assert "Artificer's Orb" in qtys_names         # qty "Ix" normalised to 1
     assert sum("Lesser" in n and "Rune" in n for n in qtys_names) >= 4
+
+
+@pytest.mark.skipif(not NOBONUS_FIXTURE.exists(), reason="no-bonus fixture not present")
+def test_qtyless_choice_kept_and_no_false_bonus():
+    pytest.importorskip("rapidocr_onnxruntime")
+    from aldur_appraiser.pipeline import appraise_roi
+
+    det = PanelDetector()
+    img = cv2.imread(str(NOBONUS_FIXTURE))
+    roi = det.reward_image(img, det.find_panel(img))
+    # panel has 3 choices (incl. a qty-less "Uncut Support Gem") and no bonus row
+    prices = {"Blacksmith's Whetstone": 0.3, "Armourer's Scrap": 0.8}
+    result = appraise_roi(roi, prices)
+    assert len(result.items) == 3            # qty-less gem retained, not dropped
+    assert result.bonus_items == []          # even spacing -> no bonus invented
+    assert any("Uncut Support Gem" in v.name for v in result.items)

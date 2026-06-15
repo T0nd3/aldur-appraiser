@@ -36,6 +36,11 @@ def _is_bonus_label(text: str) -> bool:
     return fuzz.ratio(text.lower(), "bonus reward") >= 75
 
 
+def _is_ui_label(text: str) -> bool:
+    """Non-reward chrome that may land in the ROI (the panel header)."""
+    return fuzz.ratio(text.lower(), "runeshape combinations") >= 80
+
+
 def split_bonus(lines: list[OcrLine]) -> tuple[list[OcrLine], list[OcrLine]]:
     """Split reward rows into (choices, bonus).
 
@@ -67,7 +72,7 @@ def appraise_roi(
 ) -> EvalResult:
     """OCR a reward-ROI, separate the always-paid bonus, value and rank choices."""
     engine = engine or get_engine()
-    lines = [ln for ln in engine.lines(roi) if ln.text]
+    lines = [ln for ln in engine.lines(roi) if ln.text and not _is_ui_label(ln.text)]
     choice_lines, bonus_lines = split_bonus(lines)
     keys = list(prices.keys())
 

@@ -48,21 +48,31 @@ def parse_row(
     """
     if not raw:
         return None
-    match = ROW_RE.search(raw.strip())
-    if not match:
+    s = raw.strip()
+    match = ROW_RE.search(s)
+    if match:
+        qty = _parse_qty(match.group(1))
+        if qty is None or qty < 1 or qty > MAX_QTY:
+            return None
+        raw_name = match.group(2)
+    elif keep_unknown:
+        # Inside the reward ROI every row is an option; some (e.g. gems) have no
+        # "Nx" prefix -> treat as quantity 1 rather than dropping them.
+        qty = 1
+        raw_name = s
+    else:
+        # Full-frame mode: the "Nx" anchor is our noise filter -> require it.
         return None
 
-    qty = _parse_qty(match.group(1))
-    if qty is None or qty < 1 or qty > MAX_QTY:
+    raw_name = raw_name.strip().strip(".,:;")
+    if not raw_name:
         return None
-
-    raw_name = match.group(2).strip().strip(".,:;")
     name = snap_name(raw_name, dictionary, score_cutoff=score_cutoff)
-    if name is None:
-        if keep_unknown and raw_name:
-            return qty, raw_name
-        return None
-    return qty, name
+    if name is not None:
+        return qty, name
+    if keep_unknown and len(raw_name) >= 3:
+        return qty, raw_name
+    return None
 
 
 def snap_name(
