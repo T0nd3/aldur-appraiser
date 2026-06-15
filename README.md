@@ -32,6 +32,20 @@ Capture on Windows/macOS uses `mss` (no extra setup). Run PoE2 in
 borderless/windowed fullscreen. Linux users: use the setup script below (the
 Wayland capture path needs the distro's GStreamer).
 
+#### First-run security prompt (expected)
+
+The binaries are **not code-signed** (signing certificates cost money), so the OS
+shows a one-time warning for a freshly downloaded app. This is expected for an
+open-source tool — the app only reads the screen and draws an overlay (no
+clipboard, input injection, or memory access; see the source).
+
+- **Windows (SmartScreen):** "Windows protected your PC" → **More info** → **Run
+  anyway**. Windows remembers it afterwards.
+- **macOS (Gatekeeper):** right-click the app → **Open** → **Open** (or
+  `xattr -d com.apple.quarantine ./aldur-appraiser`).
+
+If you'd rather build it yourself instead, see *From source* below.
+
 ### From source (recommended on Linux)
 
 The cross-platform setup script creates a venv, installs everything, and checks
