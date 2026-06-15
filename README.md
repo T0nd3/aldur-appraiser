@@ -14,29 +14,46 @@ Phase 1 (pricing core) is implemented and runs game-independently on Windows and
 
 ## Install
 
-The pricing core has no system dependencies (pure-Python wheels):
+Recommended — the cross-platform setup script (Linux / Windows / macOS). It
+creates a venv, installs everything, and checks your platform's capture
+prerequisites:
+
+```bash
+python scripts/setup.py
+python scripts/setup.py --check     # only re-run the environment checks
+```
+
+<details>
+<summary>Manual install</summary>
 
 ```bash
 python -m venv .venv
-. .venv/bin/activate        # Windows: .venv\Scripts\activate
-pip install -e .
+. .venv/bin/activate                # Windows: .venv\Scripts\activate
+pip install -e ".[vision]"          # pricing + RapidOCR + OpenCV + mss (all wheels)
+pip install -e ".[tesseract]"       # optional OCR fallback (needs the tesseract binary)
 ```
+</details>
 
-The vision/overlay half (later phases) is an optional extra:
+### Screen capture per platform
 
-```bash
-pip install -e ".[vision]"          # RapidOCR (primary, no system dep), OpenCV, mss
-pip install -e ".[tesseract]"       # optional OCR fallback — requires the tesseract binary:
-                                     #   Bazzite (atomic): via distrobox or an rpm-ostree layer
-                                     #   Windows: UB-Mannheim installer + PATH
-```
+- **Windows / macOS / Linux-X11:** uses `mss` (bundled wheel) — nothing extra.
+  On macOS grant Screen Recording permission to your terminal.
+- **Linux / Wayland:** `mss` can't read the screen, so capture goes through
+  xdg-desktop-portal + PipeWire. This needs the distro's GStreamer + PyGObject
+  (not pip-installable). The setup script detects and names the packages, e.g.
+  Fedora/Bazzite: `gstreamer1-plugin-pipewire python3-gobject gstreamer1-plugins-good`
+  (on atomic, layer them with `rpm-ostree install …` or use a distrobox).
+  First run shows a one-time screen-share dialog; the choice is remembered.
 
 ## Usage
 
 ```bash
+appraiser run                       # live loop: detect the panel + appraise on the console
 appraiser table --top 15            # dump the live price table
-appraiser price "Divine Orb" 3      # value a reward option
+appraiser price "Divine Orb" 3      # value a single reward option
 appraiser price "divin orb" 3 --fuzzy
+appraiser image panel.png           # appraise rewards from a screenshot
+appraiser capture-test              # grab one frame to verify screen capture
 ```
 
 ## Notes
