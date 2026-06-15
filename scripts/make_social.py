@@ -52,10 +52,8 @@ def main() -> None:
     img.alpha_composite(emblem, (90, (H - 440) // 2))
 
     # title + tagline
-    d.text((560, 238), "Aldur Appraiser", font=_font(True, 72), fill=GOLD)
-    d.text((564, 338), "PoE2 reward-valuation overlay", font=_font(False, 34), fill=BLUE)
-    d.text((564, 392), "passive · reads the screen · prices each reward",
-           font=_font(False, 24), fill=SUB)
+    d.text((560, 258), "Aldur Appraiser", font=_font(True, 72), fill=GOLD)
+    d.text((564, 358), "PoE2 reward-valuation overlay", font=_font(False, 34), fill=BLUE)
 
     img.convert("RGB").save(OUT)
     print(f"wrote {OUT} ({W}x{H})")
