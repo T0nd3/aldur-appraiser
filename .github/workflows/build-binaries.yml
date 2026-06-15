@@ -1,0 +1,59 @@
+name: build-binaries
+
+# Builds standalone binaries (no Python needed by end users):
+#   - Windows .exe
+#   - macOS binary (Apple Silicon; capture via mss, no portal needed)
+# Manual runs for iteration; v* tags attach the binaries to a GitHub Release.
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+defaults:
+  run:
+    shell: bash   # available on the Windows runner too; unifies all steps
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            binary: aldur-appraiser.exe
+            artifact: aldur-appraiser-windows
+          - os: macos-latest          # Apple Silicon (arm64)
+            binary: aldur-appraiser
+            artifact: aldur-appraiser-macos-arm64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install package + build deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[vision,overlay,build]"
+
+      - name: Build binary
+        run: pyinstaller --noconfirm aldur-appraiser.spec
+
+      - name: Smoke-test (offline; loads cv2 + RapidOCR models + Qt)
+        run: ./dist/${{ matrix.binary }} selftest
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: dist/${{ matrix.binary }}
+
+      - name: Attach to release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/${{ matrix.binary }}

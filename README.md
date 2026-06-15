@@ -16,9 +16,24 @@ implemented. Cross-platform (Windows / Linux). Live in-game tuning is ongoing.
 
 ## Install
 
-Recommended — the cross-platform setup script (Linux / Windows / macOS). It
-creates a venv, installs everything, and checks your platform's capture
-prerequisites:
+### Prebuilt binary (no Python needed) — Windows & macOS
+
+Download from the [Releases](../../releases) page and run it:
+
+- **Windows:** `aldur-appraiser.exe` — double-click (SmartScreen → "More info" →
+  "Run anyway" the first time).
+- **macOS (Apple Silicon):** `aldur-appraiser` — first launch is blocked by
+  Gatekeeper (right-click → Open, or `xattr -d com.apple.quarantine ./aldur-appraiser`),
+  and grant **Screen Recording** permission in System Settings → Privacy.
+
+Capture on Windows/macOS uses `mss` (no extra setup). Run PoE2 in
+borderless/windowed fullscreen. Linux users: use the setup script below (the
+Wayland capture path needs the distro's GStreamer).
+
+### From source (recommended on Linux)
+
+The cross-platform setup script creates a venv, installs everything, and checks
+your platform's capture prerequisites:
 
 ```bash
 python scripts/setup.py
