@@ -190,7 +190,10 @@ def run_overlay(*, backend: str | None = None, style: str = "corner", refresh: b
     stale = s.cached.stale
 
     if style == "inline":
-        overlay = build_inline_overlay(s.pc.base)
+        from aldur_appraiser.icons import base_icon_path
+
+        icon = base_icon_path(s.pc.realm, s.pc.league)  # base-currency icon (best-effort)
+        overlay = build_inline_overlay(s.pc.base, icon_path=icon)
         on_result = lambda a: overlay.post_rows(a.rows, a.anchor)  # noqa: E731
     else:
         overlay = build_overlay(s.pc.base)

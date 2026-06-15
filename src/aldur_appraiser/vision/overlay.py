@@ -52,20 +52,22 @@ def result_to_html(result: EvalResult, base: str, *, stale: bool = False) -> str
     return "".join(rows)
 
 
-def build_inline_overlay(base: str):
+def build_inline_overlay(base: str, *, icon_path=None):
     """Full-monitor, transparent, click-through overlay that paints a value chip
     at the end of each reward row (positions mapped from the OCR boxes).
 
     Receives per-row appraisals (with OCR boxes in ROI pixels) plus the anchor
-    (ROI rect + frame size) and maps each row to monitor-local coordinates.
+    (ROI rect + frame size) and maps each row to monitor-local coordinates. If
+    icon_path is given, the value is shown as "<n> [base-icon]".
     """
     from PySide6.QtCore import QRectF, Qt, Signal, Slot
-    from PySide6.QtGui import QColor, QFont, QPainter
+    from PySide6.QtGui import QColor, QFont, QPainter, QPixmap
     from PySide6.QtWidgets import QApplication, QWidget
 
     BEST = QColor("#7CFC8A")
     KNOWN = QColor("#e8e8e8")
     DIM = QColor("#9a9a9a")
+    ICON_H = 20
 
     class InlineOverlay(QWidget):
         _show = Signal(object, object)
@@ -74,7 +76,15 @@ def build_inline_overlay(base: str):
         def __init__(self):
             super().__init__()
             self.base = base
-            self._chips: list[tuple[str, float, float, QColor]] = []
+            # (text, x, y, color, show_icon)
+            self._chips: list[tuple[str, float, float, QColor, bool]] = []
+            self._icon = None
+            if icon_path is not None:
+                pm = QPixmap(str(icon_path))
+                if not pm.isNull():
+                    self._icon = pm.scaledToHeight(
+                        ICON_H, Qt.SmoothTransformation
+                    )
             flags = Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool
             if sys.platform.startswith("linux"):
                 flags |= Qt.X11BypassWindowManagerHint
@@ -105,6 +115,7 @@ def build_inline_overlay(base: str):
         def _apply_show(self, rows, anchor) -> None:
             rl, rt, rw, rh, fw, fh = anchor
             self.setGeometry(self._screen_for_frame(fw, fh).geometry())
+            has_icon = self._icon is not None
             chips = []
             for r in rows:
                 v = r.valuation
@@ -113,13 +124,15 @@ def build_inline_overlay(base: str):
                 x = rl + r.box[2] + 10            # just right of the row text
                 y = rt + (r.box[1] + r.box[3]) / 2
                 if v.known:
-                    label = f"{v.total:.1f} {self.base}"
+                    num = f"{v.total:.1f}"
+                    label = (f"+{num}" if v.is_bonus else num) if has_icon else (
+                        f"+{num} {self.base}" if v.is_bonus else f"{num} {self.base}"
+                    )
                     color = DIM if v.is_bonus else (BEST if v.is_best else KNOWN)
-                    if v.is_bonus:
-                        label = f"bonus {label}"
+                    show_icon = has_icon
                 else:
-                    label, color = "?", DIM
-                chips.append((label, float(x), float(y), color))
+                    label, color, show_icon = "?", DIM, False
+                chips.append((label, float(x), float(y), color, show_icon))
             self._chips = chips
             self.update()
             self.show()
@@ -137,15 +150,21 @@ def build_inline_overlay(base: str):
             p.setRenderHint(QPainter.Antialiasing)
             p.setFont(self._font)
             fm = p.fontMetrics()
-            for label, x, y, color in self._chips:
-                w = fm.horizontalAdvance(label) + 18
-                h = fm.height() + 8
-                rect = QRectF(x, y - h / 2, w, h)
+            pad, gap = 9, 5
+            iw = (self._icon.width() if self._icon is not None else 0)
+            h = max(fm.height(), ICON_H) + 8
+            for label, x, y, color, show_icon in self._chips:
+                tw = fm.horizontalAdvance(label)
+                w = pad + tw + (gap + iw if show_icon else 0) + pad
+                top = y - h / 2
                 p.setBrush(QColor(20, 18, 14, 225))
                 p.setPen(QColor(90, 74, 42))
-                p.drawRoundedRect(rect, 7, 7)
+                p.drawRoundedRect(QRectF(x, top, w, h), 7, 7)
                 p.setPen(color)
-                p.drawText(rect, Qt.AlignCenter, label)
+                p.drawText(QRectF(x + pad, top, tw, h), Qt.AlignVCenter | Qt.AlignLeft, label)
+                if show_icon and self._icon is not None:
+                    iy = y - self._icon.height() / 2
+                    p.drawPixmap(int(x + pad + tw + gap), int(iy), self._icon)
             p.end()
 
     return InlineOverlay()

@@ -64,7 +64,7 @@ def get_or_fetch(
     *,
     ttl_minutes: int = 20,
     realm: str = "poe2",
-    categories=("currency",),
+    categories=None,  # None = all currency categories (matches fetch_price_table)
     fetcher: Callable[..., PriceTable] = fetch_price_table,
     now: Callable[[], float] = time.time,
 ) -> CachedPrices:

@@ -62,6 +62,22 @@ def list_currency_categories(
             client.close()
 
 
+def fetch_base_icon_url(
+    realm: str, league: str, *, client: httpx.Client | None = None
+) -> str | None:
+    """URL of the league's base-currency icon (e.g. the Exalted Orb image)."""
+    owns = client is None
+    client = client or httpx.Client(timeout=DEFAULT_TIMEOUT)
+    try:
+        for lg in _get(client, f"/{realm}/Leagues"):
+            if lg.get("Value") == league:
+                return lg.get("BaseCurrencyIconUrl") or None
+        return None
+    finally:
+        if owns:
+            client.close()
+
+
 def current_league(realm: str = "poe2", *, client: httpx.Client | None = None) -> str:
     """Return the league name flagged IsCurrent (non-hardcore preferred)."""
     owns = client is None
