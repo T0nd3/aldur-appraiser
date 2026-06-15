@@ -1,20 +1,31 @@
 # Aldur Appraiser
 
-<img src="assets/icon.png" width="96" align="right" alt="Aldur Appraiser icon">
+<p align="center">
+  <img src="assets/social-preview.png" alt="Aldur Appraiser" width="640">
+</p>
 
-A **passive, read-only** overlay for Path of Exile 2 (league *Runes of Aldur*). It reads the
-*Runeshape Combinations* panel of the Ezomyte Remnant via screen capture, prices each reward
-option, and highlights the most valuable one — as a decision aid *before* you pick.
+**A passive, read-only overlay for Path of Exile 2.** It reads the *Runeshape Combinations*
+panel of the Ezomyte Remnant, prices each reward, and shows the value right next to every
+option — so you can pick the best one at a glance, before you commit.
 
-> **Use at your own risk.** This tool only reads the screen and draws its own overlay. It does
-> **not** touch the game client (no clipboard, no input injection, no memory reading). That said,
-> GGG's third-party policy is strict about automation — there is no official endorsement.
+<!-- Record a short clip of the overlay at a remnant, save it as docs/demo.gif, then uncomment:
+<p align="center"><img src="docs/demo.gif" alt="Aldur Appraiser in action" width="760"></p>
+-->
 
-## Status
+- **▸ Inline value chips** at each option — in Exalted/Divine with the currency icon; the best
+  choice is highlighted in green.
+- Excludes the always-paid **bonus reward** from the ranking, ignores hover tooltips, and marks
+  rewards it can't price as `?` (never guesses).
+- **Read-only by design:** screen capture + OCR only — no clipboard, no input injection, no
+  memory reading.
+- Runs quietly in the **system tray**. One-file builds for **Windows & macOS**, a setup script
+  for **Linux**, prices from [poe2scout](https://poe2scout.com), and a built-in update check.
 
-Pricing, OCR, panel detection, live capture (mss on Windows/X11, xdg-desktop-portal +
-PipeWire on Wayland), the capture→detect→OCR→price loop, and a Qt corner-HUD overlay are
-implemented. Cross-platform (Windows / Linux). Live in-game tuning is ongoing.
+> **Use at your own risk.** It only reads the screen and draws its own overlay; it never touches
+> the game client. There is **no official endorsement** — GGG's third-party policy is strict about
+> automation.
+
+### **[⬇ Download the latest release](../../releases/latest)**
 
 ## Install
 
