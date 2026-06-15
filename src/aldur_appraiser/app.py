@@ -44,7 +44,10 @@ class AppraiserLoop:
     prices: PriceTable
     detector: PanelDetector
     engine: ocr.OcrEngine
-    on_result: Callable[[EvalResult], None]
+    # on_result(result, anchor): anchor = (roi_left, roi_top, roi_w, roi_h,
+    # frame_w, frame_h) in captured-frame pixels, or None. Lets the overlay sit
+    # next to the panel; the console renderer ignores it.
+    on_result: Callable[[EvalResult, tuple | None], None]
     on_hide: Callable[[], None]
     score_cutoff: int = 80
 
@@ -61,6 +64,7 @@ class AppraiserLoop:
                 self.on_hide()
             return None
 
+        rect = panel.reward_roi()
         roi = self.detector.reward_image(frame, panel)
         sig = _signature(roi)
         if not _changed(self._last_sig, sig):
@@ -73,7 +77,8 @@ class AppraiserLoop:
             rows, self.prices.keys(), score_cutoff=self.score_cutoff, keep_unknown=True
         )
         result = evaluate(options, self.prices)
-        self.on_result(result)
+        anchor = (rect.left, rect.top, rect.width, rect.height, frame.shape[1], frame.shape[0])
+        self.on_result(result, anchor)
         return result
 
     def run(self, capture, *, poll_fps: float = 3.0, region=None) -> None:
@@ -146,11 +151,11 @@ def run_console(*, backend: str | None = None) -> int:
     from aldur_appraiser.vision.capture import open_capture
 
     s = _prepare(backend)
-    loop = _make_loop(
-        s,
-        on_result=lambda r: print(render_console(r, base=s.pc.base, stale=s.cached.stale) + "\n"),
-        on_hide=lambda: print("(panel closed)\n"),
-    )
+
+    def _print(r, _anchor):
+        print(render_console(r, base=s.pc.base, stale=s.cached.stale) + "\n")
+
+    loop = _make_loop(s, on_result=_print, on_hide=lambda: print("(panel closed)\n"))
     print(f"aldur-appraiser running (backend={s.backend}, league={s.pc.league}, base={s.pc.base}).")
     print("Open a Runeshape Combinations panel in-game. Ctrl+C to stop.\n")
     try:
@@ -188,7 +193,7 @@ def run_overlay(*, backend: str | None = None) -> int:
         try:
             loop = _make_loop(
                 s,
-                on_result=lambda r: overlay.post_result(r, stale),
+                on_result=lambda r, anchor: overlay.post_result(r, stale, anchor),
                 on_hide=overlay.post_hide,
             )
             with open_capture(backend=s.backend) as cap:

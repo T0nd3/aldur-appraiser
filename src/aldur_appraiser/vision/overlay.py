@@ -12,6 +12,7 @@ widgets. Heavy import (PySide6) is done lazily by the caller.
 from __future__ import annotations
 
 import html
+import sys
 
 from aldur_appraiser.pricing.valuation import EvalResult
 
@@ -54,18 +55,19 @@ def build_overlay(base: str, *, position: str = "top-right", opacity: float = 0.
     from PySide6.QtWidgets import QApplication, QLabel, QVBoxLayout, QWidget
 
     class CornerOverlay(QWidget):
-        _show = Signal(object, bool)
+        _show = Signal(object, bool, object)
         _hide = Signal()
 
         def __init__(self):
             super().__init__()
             self.base = base
             self.position = position
-            self.setWindowFlags(
-                Qt.FramelessWindowHint
-                | Qt.WindowStaysOnTopHint
-                | Qt.Tool  # keep out of taskbar / alt-tab
-            )
+            flags = Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool
+            if sys.platform.startswith("linux"):
+                # override-redirect: stay above a fullscreen game without a
+                # focus change (alt-tab), like a classic X11 HUD overlay.
+                flags |= Qt.X11BypassWindowManagerHint
+            self.setWindowFlags(flags)
             self.setAttribute(Qt.WA_TranslucentBackground, True)
             self.setAttribute(Qt.WA_ShowWithoutActivating, True)
             # passive HUD: never intercept mouse/keyboard
@@ -87,17 +89,17 @@ def build_overlay(base: str, *, position: str = "top-right", opacity: float = 0.
             self._hide.connect(self._apply_hide)
 
         # thread-safe entry points (called from the capture worker thread)
-        def post_result(self, result: EvalResult, stale: bool = False) -> None:
-            self._show.emit(result, stale)
+        def post_result(self, result: EvalResult, stale: bool = False, anchor=None) -> None:
+            self._show.emit(result, stale, anchor)
 
         def post_hide(self) -> None:
             self._hide.emit()
 
-        @Slot(object, bool)
-        def _apply_show(self, result: EvalResult, stale: bool) -> None:
+        @Slot(object, bool, object)
+        def _apply_show(self, result: EvalResult, stale: bool, anchor) -> None:
             self._label.setText(result_to_html(result, self.base, stale=stale))
             self.adjustSize()
-            self._reposition()
+            self._reposition(anchor)
             self.show()
             self.raise_()
 
@@ -105,14 +107,38 @@ def build_overlay(base: str, *, position: str = "top-right", opacity: float = 0.
         def _apply_hide(self) -> None:
             self.hide()
 
-        def _reposition(self) -> None:
-            screen = QApplication.primaryScreen().geometry()
+        def _screen_for_frame(self, fw: int, fh: int):
+            for s in QApplication.screens():
+                g = s.geometry()
+                if g.width() == fw and g.height() == fh:
+                    return s
+            return QApplication.primaryScreen()
+
+        def _reposition(self, anchor=None) -> None:
+            if anchor is not None:
+                self._anchor_near_panel(anchor)
+            else:
+                self._anchor_corner(QApplication.primaryScreen().geometry())
+
+        def _anchor_near_panel(self, anchor) -> None:
+            rl, rt, rw, rh, fw, fh = anchor
+            g = self._screen_for_frame(fw, fh).geometry()
+            margin = 12
+            # to the right of the reward column, aligned with its top
+            x = g.left() + rl + rw + margin
+            y = g.top() + rt
+            if x + self.width() > g.right():  # no room right -> left of the panel
+                x = g.left() + rl - self.width() - margin
+            x = max(g.left() + margin, x)
+            y = min(y, g.bottom() - self.height() - margin)
+            self.move(x, y)
+
+        def _anchor_corner(self, screen) -> None:
             margin = 16
-            w = self.width()
             x = screen.left() + margin
             y = screen.top() + margin
             if "right" in self.position:
-                x = screen.right() - w - margin
+                x = screen.right() - self.width() - margin
             if "bottom" in self.position:
                 y = screen.bottom() - self.height() - margin
             self.move(x, y)

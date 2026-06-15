@@ -13,6 +13,13 @@ from aldur_appraiser.vision.ocr import OcrLine  # noqa: E402
 PRICES = {"Divine Orb": 165.0, "Artificer's Orb": 0.46}
 
 
+class _FakePanel:
+    def reward_roi(self):
+        from aldur_appraiser.vision.capture import Region
+
+        return Region(0, 0, 10, 10)
+
+
 class FakeDetector:
     """Reports a panel when `present` is set; ROI is the frame itself."""
 
@@ -20,7 +27,7 @@ class FakeDetector:
         self.present = True
 
     def find_panel(self, frame):  # noqa: ARG002
-        return object() if self.present else None
+        return _FakePanel() if self.present else None
 
     def reward_image(self, frame, panel):  # noqa: ARG002
         return frame
@@ -39,7 +46,7 @@ def _make_loop(detector, engine, results, hides):
         prices=PRICES,
         detector=detector,
         engine=engine,
-        on_result=results.append,
+        on_result=lambda r, _anchor: results.append(r),
         on_hide=lambda: hides.append(True),
     )
 
