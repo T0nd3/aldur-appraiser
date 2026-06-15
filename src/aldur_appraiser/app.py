@@ -17,9 +17,9 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from aldur_appraiser.parse import parse_rows
+from aldur_appraiser.pipeline import appraise_roi
 from aldur_appraiser.pricing.client import PriceTable
-from aldur_appraiser.pricing.valuation import EvalResult, evaluate
+from aldur_appraiser.pricing.valuation import EvalResult
 from aldur_appraiser.vision import ocr
 from aldur_appraiser.vision.detect import PanelDetector
 
@@ -72,11 +72,9 @@ class AppraiserLoop:
 
         self._last_sig = sig
         self._panel_visible = True
-        rows = ocr.read_reward_rows(roi, engine=self.engine)
-        options = parse_rows(
-            rows, self.prices.keys(), score_cutoff=self.score_cutoff, keep_unknown=True
+        result = appraise_roi(
+            roi, self.prices, engine=self.engine, score_cutoff=self.score_cutoff
         )
-        result = evaluate(options, self.prices)
         anchor = (rect.left, rect.top, rect.width, rect.height, frame.shape[1], frame.shape[0])
         self.on_result(result, anchor)
         return result
@@ -108,6 +106,9 @@ def render_console(result: EvalResult, *, base: str, stale: bool = False) -> str
             lines.append(f"  {v.qty}x {v.name:<26} {'unknown':>10}{marker}")
     if result.incomplete:
         lines.append("  (comparison incomplete: an option has no market price)")
+    for v in result.bonus_items:
+        val = f"{v.total:.2f} {base}" if v.known else "unknown"
+        lines.append(f"  + bonus (always paid): {v.qty}x {v.name} — {val}")
     return "\n".join(lines)
 
 

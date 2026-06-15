@@ -60,6 +60,44 @@ class FakeDetector:
         return frame
 
 
+def test_split_bonus_by_label():
+    from aldur_appraiser.pipeline import split_bonus
+
+    lines = [
+        OcrLine("1x Lesser Storm Rune", 0.9, 0),
+        OcrLine("1x Lesser Iron Rune", 0.9, 60),
+        OcrLine("Bonus Reward", 0.8, 120),
+        OcrLine("1x Artificer's Orb", 0.9, 180),
+    ]
+    choices, bonus = split_bonus(lines)
+    assert [c.text for c in choices] == ["1x Lesser Storm Rune", "1x Lesser Iron Rune"]
+    assert [b.text for b in bonus] == ["1x Artificer's Orb"]
+
+
+def test_split_bonus_by_gap():
+    from aldur_appraiser.pipeline import split_bonus
+
+    # even spacing for choices, then a big gap before the bonus row
+    lines = [
+        OcrLine("1x Lesser Storm Rune", 0.9, 0),
+        OcrLine("1x Lesser Desert Rune", 0.9, 62),
+        OcrLine("1x Lesser Iron Rune", 0.9, 124),
+        OcrLine("1x Artificer's Orb", 0.9, 280),  # ~2.5x the typical gap below
+    ]
+    choices, bonus = split_bonus(lines)
+    assert [b.text for b in bonus] == ["1x Artificer's Orb"]
+    assert len(choices) == 3
+
+
+def test_split_bonus_none_when_even():
+    from aldur_appraiser.pipeline import split_bonus
+
+    lines = [OcrLine("1x A", 0.9, 0), OcrLine("1x B", 0.9, 60), OcrLine("1x C", 0.9, 120)]
+    choices, bonus = split_bonus(lines)
+    assert bonus == []
+    assert len(choices) == 3
+
+
 def test_pipeline_roi_mode_keeps_unknown_rewards():
     # In ROI mode every "Nx <name>" line is a real reward: unknown ones are
     # kept (known=False) and flag the comparison incomplete.

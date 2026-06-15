@@ -86,6 +86,9 @@ def cmd_image(args: argparse.Namespace) -> int:
             print(f"  {v.qty}x {v.name:<24} {'unknown':>10}{marker}")
     if result.incomplete:
         print("  (comparison incomplete: an option has no market price)")
+    for v in result.bonus_items:
+        val = f"{v.total:.2f} {base}" if v.known else "unknown"
+        print(f"  + bonus (always paid): {v.qty}x {v.name} — {val}")
     return 0
 
 

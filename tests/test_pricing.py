@@ -164,6 +164,28 @@ def test_evaluate_orders_by_total_not_unit():
     assert result.best.name == "Chaos Orb"
 
 
+def test_bonus_is_valued_but_not_ranked():
+    prices = {"Divine Orb": 165.0, "Regal Orb": 0.34}
+    # Regal Orb is the bonus (always paid) and far more... no: it's cheap here,
+    # but even a valuable bonus must never be BEST or affect the choice ranking.
+    result = evaluate([(1, "Divine Orb")], prices, bonus=[(1, "Regal Orb")])
+
+    assert result.best.name == "Divine Orb"            # bonus excluded from ranking
+    assert [v.name for v in result.items] == ["Divine Orb"]
+    assert len(result.bonus_items) == 1
+    assert result.bonus_items[0].name == "Regal Orb"
+    assert result.bonus_items[0].is_bonus is True
+    assert result.bonus_items[0].total == 0.34
+
+
+def test_bonus_does_not_trigger_incomplete():
+    prices = {"Divine Orb": 165.0}
+    # an unknown *bonus* must not make the choice comparison incomplete
+    result = evaluate([(1, "Divine Orb")], prices, bonus=[(1, "Mystery Bonus")])
+    assert result.incomplete is False
+    assert result.bonus_items[0].known is False
+
+
 def test_evaluate_unknown_currency_is_incomplete():
     prices = {"Divine Orb": 165.0}
     result = evaluate([(1, "Divine Orb"), (1, "Mystery Item")], prices)

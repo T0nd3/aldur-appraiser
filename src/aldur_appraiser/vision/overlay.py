@@ -40,6 +40,13 @@ def result_to_html(result: EvalResult, base: str, *, stale: bool = False) -> str
 
     if result.incomplete:
         rows.append("<div style='color:#caa45a;font-size:11px'>comparison incomplete</div>")
+    for v in result.bonus_items:
+        val = f"{v.total:.1f} {base}" if v.known else "?"
+        bname = html.escape(v.name)
+        rows.append(
+            "<div style='color:#8a8a8a;font-size:11px'>"
+            f"+ bonus: {v.qty}x {bname} &mdash; {val}</div>"
+        )
     if stale:
         rows.append("<div style='color:#caa45a;font-size:11px'>&#9888; stale prices</div>")
     return "".join(rows)
