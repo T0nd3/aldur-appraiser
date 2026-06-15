@@ -8,9 +8,7 @@
 panel of the Ezomyte Remnant, prices each reward, and shows the value right next to every
 option — so you can pick the best one at a glance, before you commit.
 
-<!-- Record a short clip of the overlay at a remnant, save it as docs/demo.gif, then uncomment:
-<p align="center"><img src="docs/demo.gif" alt="Aldur Appraiser in action" width="760"></p>
--->
+<p align="center"><img src="docs/demo.gif" alt="Aldur Appraiser in action" width="680"></p>
 
 - **▸ Inline value chips** at each option — in Exalted/Divine with the currency icon; the best
   choice is highlighted in green.
