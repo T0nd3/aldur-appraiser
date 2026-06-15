@@ -9,11 +9,22 @@ import pytest
 cv2 = pytest.importorskip("cv2")
 np = pytest.importorskip("numpy")
 
+from aldur_appraiser.vision import detect as detect_mod  # noqa: E402
 from aldur_appraiser.vision.capture import Region, _to_bgr  # noqa: E402
 from aldur_appraiser.vision.detect import PanelBox, PanelDetector  # noqa: E402
 
 FIXDIR = Path(__file__).resolve().parents[1] / "assets" / "fixtures"
-FIXTURES = [p for p in (FIXDIR / "runeshape_01.png", FIXDIR / "runeshape_02.png") if p.exists()]
+FIXTURES = [
+    p
+    for p in (
+        FIXDIR / "runeshape_01.png",
+        FIXDIR / "runeshape_02.png",
+        FIXDIR / "runeshape_03.png",
+    )
+    if p.exists()
+]
+REGAL_FIXTURES = [p for p in FIXTURES if p.name in {"runeshape_01.png", "runeshape_02.png"}]
+RUNE_FIXTURE = FIXDIR / "runeshape_03.png"
 
 
 # --- capture helpers (no live display needed) --------------------------------
@@ -38,8 +49,8 @@ def test_reward_roi_scales_with_header():
     roi = panel.reward_roi()
     assert roi.left == 1085
     assert roi.top == 140 + 68          # one header-height below header top
-    assert roi.width == int(267 * 1.95)
-    assert roi.height == int(68 * 5.0)
+    assert roi.width == int(267 * detect_mod.ROI_WIDTH_FROM_HEADER_W)
+    assert roi.height == int(68 * detect_mod.ROI_HEIGHT_FROM_HEADER_H)
 
 
 # --- detection on blanks -----------------------------------------------------
@@ -75,8 +86,8 @@ def test_detects_panel_in_fixture(path):
     assert crop.shape[0] > 0 and crop.shape[1] > 0
 
 
-@pytest.mark.skipif(not FIXTURES, reason="real fixtures not present")
-@pytest.mark.parametrize("path", FIXTURES, ids=lambda p: p.name)
+@pytest.mark.skipif(not REGAL_FIXTURES, reason="regal fixtures not present")
+@pytest.mark.parametrize("path", REGAL_FIXTURES, ids=lambda p: p.name)
 def test_roi_ocr_isolates_currency_reward(path):
     pytest.importorskip("rapidocr_onnxruntime")
     from aldur_appraiser.parse import parse_rows
@@ -89,3 +100,20 @@ def test_roi_ocr_isolates_currency_reward(path):
     rows = ocr.read_reward_rows(crop)
     options = parse_rows(rows, ["Regal Orb", "Divine Orb", "Chaos Orb"])
     assert (1, "Regal Orb") in options
+
+
+@pytest.mark.skipif(not RUNE_FIXTURE.exists(), reason="rune fixture not present")
+def test_roi_keeps_unknown_runes_and_finds_bonus_orb():
+    pytest.importorskip("rapidocr_onnxruntime")
+    from aldur_appraiser.parse import parse_rows
+    from aldur_appraiser.vision import ocr
+
+    det = PanelDetector()
+    img = cv2.imread(str(RUNE_FIXTURE))
+    crop = det.reward_image(img, det.find_panel(img))
+    rows = ocr.read_reward_rows(crop)
+    # ROI mode: every "Nx <name>" line kept; 4 runes + the bonus Artificer's Orb
+    options = parse_rows(rows, ["Artificer's Orb", "Divine Orb"], keep_unknown=True)
+    qtys_names = {name for _, name in options}
+    assert "Artificer's Orb" in qtys_names         # qty "Ix" normalised to 1
+    assert sum("Lesser" in n and "Rune" in n for n in qtys_names) >= 4

@@ -61,14 +61,16 @@ def cmd_image(args: argparse.Namespace) -> int:
     import cv2
 
     from aldur_appraiser.pipeline import appraise_image
+    from aldur_appraiser.vision.detect import PanelDetector
 
     image = cv2.imread(args.path)
     if image is None:
         print(f"error: could not read image {args.path!r}", file=sys.stderr)
         return 1
 
+    detector = None if args.no_detect else PanelDetector()
     cached, base = _load_prices(args)
-    result = appraise_image(image, cached.table)
+    result = appraise_image(image, cached.table, detector=detector)
     if not result.items:
         print("no reward options recognised in image")
         return 0
@@ -112,6 +114,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     pi = sub.add_parser("image", help="appraise rewards from a panel image")
     pi.add_argument("path", help="path to a screenshot / reward-panel image")
+    pi.add_argument(
+        "--no-detect",
+        action="store_true",
+        help="skip panel detection and OCR the whole frame",
+    )
     pi.set_defaults(func=cmd_image)
 
     pt = sub.add_parser("table", help="dump the price table")

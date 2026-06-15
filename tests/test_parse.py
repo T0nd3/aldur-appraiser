@@ -50,6 +50,27 @@ def test_snap_name_direct():
     assert snap_name("totally unknown thing", DICT) is None
 
 
+def test_qty_normalises_confused_digits():
+    # italic-serif OCR slips: "1x" -> "Ix" / "ix" / "lx"
+    assert parse_row("Ix Divine Orb", DICT) == (1, "Divine Orb")
+    assert parse_row("ix Chaos Orb", DICT) == (1, "Chaos Orb")
+    assert parse_row("lx Divine Orb", DICT) == (1, "Divine Orb")
+
+
+def test_keep_unknown_retains_real_reward_rows():
+    # inside a detected ROI, a parseable line that doesn't snap is a real but
+    # unvaluable reward (kept), not noise (dropped)
+    assert parse_row("1x Lesser Storm Rune", DICT, keep_unknown=True) == (1, "Lesser Storm Rune")
+    # without keep_unknown the same line is dropped
+    assert parse_row("1x Lesser Storm Rune", DICT) is None
+
+
+def test_keep_unknown_still_needs_qty_pattern():
+    # non-reward lines without a quantity are dropped even in keep_unknown mode
+    assert parse_row("Bonus Reward", DICT, keep_unknown=True) is None
+    assert parse_row("Runeshape Combinations", DICT, keep_unknown=True) is None
+
+
 def test_parse_rows_drops_unparseable():
     rows = [
         "1x Orb of Augmentation",

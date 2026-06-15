@@ -28,7 +28,10 @@ DEFAULT_THRESHOLD = 0.6
 # Reward ROI as multiples of the matched header box (left=hx, top=hy).
 ROI_TOP_FROM_HEADER_H = 1.0   # start one header-height below the header top
 ROI_WIDTH_FROM_HEADER_W = 1.95
-ROI_HEIGHT_FROM_HEADER_H = 5.0
+# Tall enough for up to ~4 options + the bonus reward row (Artificer's Orb in
+# fixture 03 sits ~6.5 header-heights below the header top). x stays inside the
+# book, so extra height only catches empty parchment, never the quest tracker.
+ROI_HEIGHT_FROM_HEADER_H = 7.0
 
 
 @dataclass(frozen=True)

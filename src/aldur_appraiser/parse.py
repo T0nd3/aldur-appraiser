@@ -15,12 +15,20 @@ from collections.abc import Iterable
 
 from rapidfuzz import process
 
-# "1x Orb of Augmentation", "20 x Chaos Orb", "3X Divine Orb"
-ROW_RE = re.compile(r"(\d+)\s*[xX]\s*(.+)", re.IGNORECASE)
+# "1x Orb of Augmentation", "20 x Chaos Orb", "3X Divine Orb".
+# The quantity token allows letters the OCR confuses with digits on the italic
+# serif font ("1x" -> "Ix"/"ix"/"lx", "0" -> "O"); they're normalised below.
+ROW_RE = re.compile(r"([0-9IilOo]+)\s*[xX×]\s*(.+)")
+_QTY_FIX = str.maketrans({"I": "1", "i": "1", "l": "1", "O": "0", "o": "0"})
 
 DEFAULT_CUTOFF = 80
 # Reject absurd quantities (OCR garbage); real stacks stay well under this.
 MAX_QTY = 100_000
+
+
+def _parse_qty(token: str) -> int | None:
+    fixed = token.translate(_QTY_FIX)
+    return int(fixed) if fixed.isdigit() else None
 
 
 def parse_row(
@@ -28,20 +36,31 @@ def parse_row(
     dictionary: Iterable[str],
     *,
     score_cutoff: int = DEFAULT_CUTOFF,
+    keep_unknown: bool = False,
 ) -> tuple[int, str] | None:
-    """Parse one OCR line into (qty, canonical_name), or None if unusable."""
+    """Parse one OCR line into (qty, name), or None if unusable.
+
+    With keep_unknown=False the name must fuzzy-snap to the dictionary (used on
+    full frames, where the dictionary doubles as a noise filter). With
+    keep_unknown=True a parseable "<qty>x <name>" line that doesn't snap keeps
+    its cleaned raw name (used inside the detected reward ROI, where every such
+    line is a genuine reward we just can't price -> later valued known=False).
+    """
     if not raw:
         return None
     match = ROW_RE.search(raw.strip())
     if not match:
         return None
 
-    qty = int(match.group(1))
-    if qty < 1 or qty > MAX_QTY:
+    qty = _parse_qty(match.group(1))
+    if qty is None or qty < 1 or qty > MAX_QTY:
         return None
 
-    name = snap_name(match.group(2), dictionary, score_cutoff=score_cutoff)
+    raw_name = match.group(2).strip().strip(".,:;")
+    name = snap_name(raw_name, dictionary, score_cutoff=score_cutoff)
     if name is None:
+        if keep_unknown and raw_name:
+            return qty, raw_name
         return None
     return qty, name
 
@@ -65,12 +84,13 @@ def parse_rows(
     dictionary: Iterable[str],
     *,
     score_cutoff: int = DEFAULT_CUTOFF,
+    keep_unknown: bool = False,
 ) -> list[tuple[int, str]]:
-    """Parse many OCR lines, dropping any that don't yield a confident option."""
+    """Parse many OCR lines, dropping any that don't yield a usable option."""
     dictionary = list(dictionary)  # reuse across rows
     out: list[tuple[int, str]] = []
     for raw in rows:
-        opt = parse_row(raw, dictionary, score_cutoff=score_cutoff)
+        opt = parse_row(raw, dictionary, score_cutoff=score_cutoff, keep_unknown=keep_unknown)
         if opt is not None:
             out.append(opt)
     return out
