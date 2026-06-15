@@ -12,6 +12,7 @@ in the venv. We import `gi` and, if that fails, add the system site-packages
 
 from __future__ import annotations
 
+import os
 import secrets
 import sys
 import sysconfig
@@ -20,6 +21,11 @@ from pathlib import Path
 import numpy as np
 
 from aldur_appraiser.config import config_dir
+
+
+def _debug(msg: str) -> None:
+    if os.environ.get("ALDUR_PORTAL_DEBUG"):
+        print(f"[portal] {msg}", file=sys.stderr, flush=True)
 
 
 def _ensure_gi() -> None:
@@ -96,12 +102,13 @@ class PortalScreenCast:
     def _new_token(self) -> str:
         return "aldur_" + secrets.token_hex(8)
 
-    def _request(self, method: str, args, options: dict):
+    def _request(self, method: str, args, options: dict, *, timeout_s: int = 60):
         """Call a ScreenCast method and block until its Response signal fires.
 
         Returns the results dict from the org.freedesktop.portal.Request.Response
         signal (response code 0 = success).
         """
+        _debug(f"{method}: calling (timeout {timeout_s}s)")
         GLib = self._GLib
         Gio = self._Gio
 
@@ -143,16 +150,20 @@ class PortalScreenCast:
                 -1,
                 None,
             )
-            # 5 min: covers the first-run interactive permission dialog.
-            GLib.timeout_add_seconds(300, loop.quit)
+            GLib.timeout_add_seconds(timeout_s, loop.quit)
             loop.run()
         finally:
             self._bus.signal_unsubscribe(sub_id)
 
         if "code" not in result:
-            raise PortalError(f"{method}: timed out waiting for portal response")
+            raise PortalError(
+                f"{method}: timed out after {timeout_s}s waiting for the portal. "
+                "If a screen-share dialog appeared, approve it (alt-tab out of the game)."
+            )
         if result["code"] != 0:
+            # 1 = user cancelled, 2 = ended; anything non-zero is a failure here.
             raise PortalError(f"{method}: portal request failed (code {result['code']})")
+        _debug(f"{method}: response ok")
         return result["results"]
 
     def _pack_args(self, method: str, args: tuple):
@@ -168,12 +179,34 @@ class PortalScreenCast:
 
     def connect(self) -> None:
         """Run (or restore) the portal session and start the PipeWire pipeline."""
+        try:
+            self._handshake(_read_restore_token())
+        except PortalError as exc:
+            # A stale/invalid restore token can hang or fail; drop it and prompt
+            # the user fresh exactly once.
+            if _read_restore_token() is not None:
+                _debug(f"handshake with restore token failed ({exc}); retrying fresh")
+                _token_path().unlink(missing_ok=True)
+                self._reset_session()
+                self._handshake(None)
+            else:
+                raise
+
+    def _reset_session(self) -> None:
+        self._session_handle = None
+        if self._pipeline is not None:
+            self._pipeline.set_state(self._Gst.State.NULL)
+            self._pipeline = None
+
+    def _handshake(self, token: str | None) -> None:
         GLib = self._GLib
 
+        _debug("CreateSession")
         res = self._request(
             "CreateSession",
             (),
             {"session_handle_token": GLib.Variant("s", self._new_token())},
+            timeout_s=30,
         )
         self._session_handle = res["session_handle"]
 
@@ -182,12 +215,16 @@ class PortalScreenCast:
             "cursor_mode": GLib.Variant("u", 1),     # 1 = hidden
             "persist_mode": GLib.Variant("u", 2),    # 2 = persist until revoked
         }
-        token = _read_restore_token()
         if token:
             select_opts["restore_token"] = GLib.Variant("s", token)
-        self._request("SelectSources", (self._session_handle,), select_opts)
+        _debug(f"SelectSources (restore_token={'yes' if token else 'no'})")
+        self._request("SelectSources", (self._session_handle,), select_opts, timeout_s=30)
 
-        start_res = self._request("Start", (self._session_handle, ""), {})
+        # Start may show the interactive dialog on first run -> allow longer.
+        _debug("Start")
+        start_res = self._request(
+            "Start", (self._session_handle, ""), {}, timeout_s=180
+        )
         if start_res.get("restore_token"):
             _write_restore_token(start_res["restore_token"])
 
@@ -195,8 +232,10 @@ class PortalScreenCast:
         if not streams:
             raise PortalError("portal returned no streams")
         node_id = streams[0][0]
+        _debug(f"stream node id={node_id}")
 
         fd = self._open_pipewire_remote()
+        _debug(f"pipewire fd={fd}")
         self._build_pipeline(fd, node_id)
 
     def _open_pipewire_remote(self) -> int:
@@ -229,10 +268,35 @@ class PortalScreenCast:
         self._pipeline = Gst.parse_launch(desc)
         self._appsink = self._pipeline.get_by_name("sink")
         self._pipeline.set_state(Gst.State.PLAYING)
-        # Wait for PLAYING so the first grab has a buffer.
-        self._pipeline.get_state(self._Gst.SECOND * 5)
-        # Prime: wait once for the first frame so last-sample is populated.
-        self._appsink.try_pull_sample(self._Gst.SECOND * 5)
+        # A healthy pipeline reaches PLAYING almost instantly (in-game the screen
+        # is always changing). If it's still PAUSED after a few seconds,
+        # pipewiresrc got no data — typically a stale KDE restore token.
+        ret, state, _ = self._pipeline.get_state(self._Gst.SECOND * 3)
+        _debug(f"pipeline state change: ret={ret.value_nick} state={state.value_nick}")
+        if state != Gst.State.PLAYING:
+            raise PortalError(
+                f"capture pipeline stalled in {state.value_nick}: {self._drain_bus_error()}"
+            )
+        # Prime so last-sample is populated for the first grab.
+        if self._appsink.try_pull_sample(self._Gst.SECOND * 5) is None:
+            _debug("prime pull returned no sample (may still arrive via last-sample)")
+
+    def _drain_bus_error(self) -> str:
+        """Pop any pending error/warning off the bus for a useful message."""
+        Gst = self._Gst
+        bus = self._pipeline.get_bus()
+        msgs = []
+        while True:
+            msg = bus.pop_filtered(Gst.MessageType.ERROR | Gst.MessageType.WARNING)
+            if msg is None:
+                break
+            if msg.type == Gst.MessageType.ERROR:
+                err, _dbg = msg.parse_error()
+                msgs.append(f"error: {err.message}")
+            else:
+                err, _dbg = msg.parse_warning()
+                msgs.append(f"warning: {err.message}")
+        return "; ".join(msgs) or "no bus error reported"
 
     def grab(self, region=None) -> np.ndarray:
         """Return the most recent frame as BGR; crop to region if given.
