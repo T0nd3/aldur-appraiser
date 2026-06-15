@@ -214,6 +214,21 @@ def test_evaluate_orders_by_total_not_unit():
     assert result.best.name == "Chaos Orb"
 
 
+def test_format_value_switches_to_divine_for_large_totals():
+    from aldur_appraiser.pricing.valuation import format_value
+
+    rate = 165.0  # exalted per divine
+    # small value stays in the base unit
+    assert format_value(50.0, rate) == (50.0, "exalted")
+    # >= 1 divine switches to divine
+    val, unit = format_value(495.0, rate)
+    assert unit == "divine" and val == pytest.approx(3.0)
+    # exactly one divine
+    assert format_value(165.0, rate) == (1.0, "divine")
+    # no rate -> stays base
+    assert format_value(999.0, None) == (999.0, "exalted")
+
+
 def test_bonus_is_valued_but_not_ranked():
     prices = {"Divine Orb": 165.0, "Regal Orb": 0.34}
     # Regal Orb is the bonus (always paid) and far more... no: it's cheap here,

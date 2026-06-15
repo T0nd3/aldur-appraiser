@@ -48,11 +48,14 @@ def cmd_price(args: argparse.Namespace) -> int:
             print(f"(snapped {name!r} -> {snapped!r})")
             name = snapped
 
+    from aldur_appraiser.pricing.valuation import divine_rate, format_value
+
     result = evaluate([(args.qty, name)], cached.table)
     v = result.items[0]
     stale = " [STALE]" if cached.stale else ""
     if v.known:
-        print(f"{v.qty}x {v.name} = {v.total:.2f} {base} ({v.unit:.4f} each){stale}")
+        val, unit = format_value(v.total, divine_rate(cached.table), base_unit=base)
+        print(f"{v.qty}x {v.name} = {val:.2f} {unit} ({v.unit:.4f} {base} each){stale}")
     else:
         print(f"{v.qty}x {v.name} = unknown (no market price){stale}")
     return 0
@@ -76,18 +79,26 @@ def cmd_image(args: argparse.Namespace) -> int:
         print("no reward options recognised in image")
         return 0
 
+    from aldur_appraiser.pricing.valuation import divine_rate, format_value
+
+    dr = divine_rate(cached.table)
+
+    def fmt(total: float) -> str:
+        val, unit = format_value(total, dr, base_unit=base)
+        return f"{val:.2f} {unit}"
+
     stale = " [STALE PRICES]" if cached.stale else ""
     print(f"Reward ranking (base={base}){stale}:")
     for v in result.items:
         marker = " <-- BEST" if v.is_best else ""
         if v.known:
-            print(f"  {v.qty}x {v.name:<24} {v.total:>10.2f} {base}{marker}")
+            print(f"  {v.qty}x {v.name:<24} {fmt(v.total):>14}{marker}")
         else:
-            print(f"  {v.qty}x {v.name:<24} {'unknown':>10}{marker}")
+            print(f"  {v.qty}x {v.name:<24} {'unknown':>14}{marker}")
     if result.incomplete:
         print("  (comparison incomplete: an option has no market price)")
     for v in result.bonus_items:
-        val = f"{v.total:.2f} {base}" if v.known else "unknown"
+        val = fmt(v.total) if v.known else "unknown"
         print(f"  + bonus (always paid): {v.qty}x {v.name} — {val}")
     return 0
 

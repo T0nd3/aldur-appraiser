@@ -14,7 +14,7 @@ from pathlib import Path
 import httpx
 
 from aldur_appraiser.config import cache_dir
-from aldur_appraiser.pricing.client import fetch_base_icon_url
+from aldur_appraiser.pricing.client import fetch_base_icon_url, fetch_currency_icon_urls
 
 _TIMEOUT = 15.0
 
@@ -48,3 +48,20 @@ def base_icon_path(realm: str, league: str) -> Path | None:
     except Exception:  # noqa: BLE001 - icon is cosmetic; never block on it
         return None
     return _download(url) if url else None
+
+
+def currency_icon_paths(realm: str, league: str) -> dict[str, Path]:
+    """Local paths to the denomination icons: {'exalted': Path, 'divine': Path}.
+
+    Best-effort: missing/failed downloads are simply omitted.
+    """
+    try:
+        urls = fetch_currency_icon_urls(realm, league)
+    except Exception:  # noqa: BLE001 - cosmetic
+        return {}
+    out: dict[str, Path] = {}
+    for unit, url in urls.items():
+        path = _download(url)
+        if path is not None:
+            out[unit] = path
+    return out

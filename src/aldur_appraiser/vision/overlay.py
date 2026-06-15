@@ -14,11 +14,18 @@ from __future__ import annotations
 import html
 import sys
 
-from aldur_appraiser.pricing.valuation import EvalResult
+from aldur_appraiser.pricing.valuation import EvalResult, format_value
 
 
-def result_to_html(result: EvalResult, base: str, *, stale: bool = False) -> str:
+def result_to_html(
+    result: EvalResult, base: str, *, stale: bool = False, dr: float | None = None
+) -> str:
     """Render an EvalResult as the HUD's HTML body."""
+
+    def fmt(total: float) -> str:
+        val, unit = format_value(total, dr, base_unit=base)
+        return f"{val:.1f} {unit}"
+
     rows = ["<div style='font-weight:bold;color:#d9c89a'>Aldur Appraiser</div>"]
     if not result.items:
         rows.append("<div style='color:#aaa'>no reward options recognised</div>")
@@ -27,21 +34,22 @@ def result_to_html(result: EvalResult, base: str, *, stale: bool = False) -> str
     for v in result.items:
         name = html.escape(v.name)
         if v.known:
-            val = f"{v.total:.1f} {base}"
             if v.is_best:
                 rows.append(
                     f"<div style='color:#7CFC8A;font-weight:bold'>&#9656; {v.qty}x {name} "
-                    f"&mdash; {val}</div>"
+                    f"&mdash; {fmt(v.total)}</div>"
                 )
             else:
-                rows.append(f"<div style='color:#e8e8e8'>{v.qty}x {name} &mdash; {val}</div>")
+                rows.append(
+                    f"<div style='color:#e8e8e8'>{v.qty}x {name} &mdash; {fmt(v.total)}</div>"
+                )
         else:
             rows.append(f"<div style='color:#888'>{v.qty}x {name} &mdash; ?</div>")
 
     if result.incomplete:
         rows.append("<div style='color:#caa45a;font-size:13px'>comparison incomplete</div>")
     for v in result.bonus_items:
-        val = f"{v.total:.1f} {base}" if v.known else "?"
+        val = fmt(v.total) if v.known else "?"
         bname = html.escape(v.name)
         rows.append(
             "<div style='color:#8a8a8a;font-size:13px'>"
@@ -52,17 +60,20 @@ def result_to_html(result: EvalResult, base: str, *, stale: bool = False) -> str
     return "".join(rows)
 
 
-def build_inline_overlay(base: str, *, icon_path=None):
+def build_inline_overlay(base: str, *, icon_paths=None, divine_rate=None):
     """Full-monitor, transparent, click-through overlay that paints a value chip
     at the end of each reward row (positions mapped from the OCR boxes).
 
     Receives per-row appraisals (with OCR boxes in ROI pixels) plus the anchor
-    (ROI rect + frame size) and maps each row to monitor-local coordinates. If
-    icon_path is given, the value is shown as "<n> [base-icon]".
+    (ROI rect + frame size) and maps each row to monitor-local coordinates.
+    Values are shown as "<n> [unit-icon]"; large totals switch to Divine via
+    format_value(divine_rate). icon_paths maps unit -> icon file.
     """
     from PySide6.QtCore import QRectF, Qt, Signal, Slot
     from PySide6.QtGui import QColor, QFont, QPainter, QPixmap
     from PySide6.QtWidgets import QApplication, QWidget
+
+    from aldur_appraiser.pricing.valuation import format_value
 
     BEST = QColor("#7CFC8A")
     KNOWN = QColor("#e8e8e8")
@@ -76,15 +87,14 @@ def build_inline_overlay(base: str, *, icon_path=None):
         def __init__(self):
             super().__init__()
             self.base = base
-            # (text, x, y, color, show_icon)
-            self._chips: list[tuple[str, float, float, QColor, bool]] = []
-            self._icon = None
-            if icon_path is not None:
-                pm = QPixmap(str(icon_path))
+            self.divine_rate = divine_rate
+            # (text, x, y, color, pixmap_or_None)
+            self._chips: list[tuple[str, float, float, QColor, object]] = []
+            self._icons: dict[str, QPixmap] = {}
+            for unit, path in (icon_paths or {}).items():
+                pm = QPixmap(str(path))
                 if not pm.isNull():
-                    self._icon = pm.scaledToHeight(
-                        ICON_H, Qt.SmoothTransformation
-                    )
+                    self._icons[unit] = pm.scaledToHeight(ICON_H, Qt.SmoothTransformation)
             flags = Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool
             if sys.platform.startswith("linux"):
                 flags |= Qt.X11BypassWindowManagerHint
@@ -115,7 +125,6 @@ def build_inline_overlay(base: str, *, icon_path=None):
         def _apply_show(self, rows, anchor) -> None:
             rl, rt, rw, rh, fw, fh = anchor
             self.setGeometry(self._screen_for_frame(fw, fh).geometry())
-            has_icon = self._icon is not None
             chips = []
             for r in rows:
                 v = r.valuation
@@ -124,15 +133,16 @@ def build_inline_overlay(base: str, *, icon_path=None):
                 x = rl + r.box[2] + 10            # just right of the row text
                 y = rt + (r.box[1] + r.box[3]) / 2
                 if v.known:
-                    num = f"{v.total:.1f}"
-                    label = (f"+{num}" if v.is_bonus else num) if has_icon else (
-                        f"+{num} {self.base}" if v.is_bonus else f"{num} {self.base}"
+                    val, unit = format_value(v.total, self.divine_rate, base_unit=self.base)
+                    icon = self._icons.get(unit)
+                    num = f"{val:.1f}"
+                    label = (f"+{num}" if v.is_bonus else num) if icon else (
+                        f"+{num} {unit}" if v.is_bonus else f"{num} {unit}"
                     )
                     color = DIM if v.is_bonus else (BEST if v.is_best else KNOWN)
-                    show_icon = has_icon
                 else:
-                    label, color, show_icon = "?", DIM, False
-                chips.append((label, float(x), float(y), color, show_icon))
+                    label, color, icon = "?", DIM, None
+                chips.append((label, float(x), float(y), color, icon))
             self._chips = chips
             self.update()
             self.show()
@@ -151,20 +161,19 @@ def build_inline_overlay(base: str, *, icon_path=None):
             p.setFont(self._font)
             fm = p.fontMetrics()
             pad, gap = 9, 5
-            iw = (self._icon.width() if self._icon is not None else 0)
             h = max(fm.height(), ICON_H) + 8
-            for label, x, y, color, show_icon in self._chips:
+            for label, x, y, color, icon in self._chips:
                 tw = fm.horizontalAdvance(label)
-                w = pad + tw + (gap + iw if show_icon else 0) + pad
+                iw = icon.width() if icon is not None else 0
+                w = pad + tw + (gap + iw if icon is not None else 0) + pad
                 top = y - h / 2
                 p.setBrush(QColor(20, 18, 14, 225))
                 p.setPen(QColor(90, 74, 42))
                 p.drawRoundedRect(QRectF(x, top, w, h), 7, 7)
                 p.setPen(color)
                 p.drawText(QRectF(x + pad, top, tw, h), Qt.AlignVCenter | Qt.AlignLeft, label)
-                if show_icon and self._icon is not None:
-                    iy = y - self._icon.height() / 2
-                    p.drawPixmap(int(x + pad + tw + gap), int(iy), self._icon)
+                if icon is not None:
+                    p.drawPixmap(int(x + pad + tw + gap), int(y - icon.height() / 2), icon)
             p.end()
 
     return InlineOverlay()
@@ -180,7 +189,7 @@ def build_overlay(base: str, *, position: str = "top-right", opacity: float = 0.
     from PySide6.QtWidgets import QApplication, QLabel, QVBoxLayout, QWidget
 
     class CornerOverlay(QWidget):
-        _show = Signal(object, bool, object)
+        _show = Signal(object, bool, object, object)
         _hide = Signal()
 
         def __init__(self):
@@ -215,15 +224,17 @@ def build_overlay(base: str, *, position: str = "top-right", opacity: float = 0.
             self._hide.connect(self._apply_hide)
 
         # thread-safe entry points (called from the capture worker thread)
-        def post_result(self, result: EvalResult, stale: bool = False, anchor=None) -> None:
-            self._show.emit(result, stale, anchor)
+        def post_result(
+            self, result: EvalResult, stale: bool = False, anchor=None, dr=None
+        ) -> None:
+            self._show.emit(result, stale, anchor, dr)
 
         def post_hide(self) -> None:
             self._hide.emit()
 
-        @Slot(object, bool, object)
-        def _apply_show(self, result: EvalResult, stale: bool, anchor) -> None:
-            self._label.setText(result_to_html(result, self.base, stale=stale))
+        @Slot(object, bool, object, object)
+        def _apply_show(self, result: EvalResult, stale: bool, anchor, dr) -> None:
+            self._label.setText(result_to_html(result, self.base, stale=stale, dr=dr))
             self.adjustSize()
             self._reposition(anchor)
             self.show()

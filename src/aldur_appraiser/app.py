@@ -19,7 +19,7 @@ import numpy as np
 
 from aldur_appraiser.pipeline import Appraisal, appraise_roi_rows, rows_to_result
 from aldur_appraiser.pricing.client import PriceTable
-from aldur_appraiser.pricing.valuation import EvalResult
+from aldur_appraiser.pricing.valuation import EvalResult, divine_rate, format_value
 from aldur_appraiser.vision import ocr
 from aldur_appraiser.vision.detect import PanelDetector
 
@@ -94,20 +94,27 @@ class AppraiserLoop:
 # --- console rendering -------------------------------------------------------
 
 
-def render_console(result: EvalResult, *, base: str, stale: bool = False) -> str:
+def _fmt(total: float, base: str, dr: float | None) -> str:
+    val, unit = format_value(total, dr, base_unit=base)
+    return f"{val:.2f} {unit}"
+
+
+def render_console(
+    result: EvalResult, *, base: str, stale: bool = False, dr: float | None = None
+) -> str:
     if not result.items:
         return "Panel open — no reward options recognised."
     lines = [f"Reward ranking (base={base}){' [STALE PRICES]' if stale else ''}:"]
     for v in result.items:
         marker = "  <-- BEST" if v.is_best else ""
         if v.known:
-            lines.append(f"  {v.qty}x {v.name:<26} {v.total:>10.2f} {base}{marker}")
+            lines.append(f"  {v.qty}x {v.name:<26} {_fmt(v.total, base, dr):>14}{marker}")
         else:
-            lines.append(f"  {v.qty}x {v.name:<26} {'unknown':>10}{marker}")
+            lines.append(f"  {v.qty}x {v.name:<26} {'unknown':>14}{marker}")
     if result.incomplete:
         lines.append("  (comparison incomplete: an option has no market price)")
     for v in result.bonus_items:
-        val = f"{v.total:.2f} {base}" if v.known else "unknown"
+        val = _fmt(v.total, base, dr) if v.known else "unknown"
         lines.append(f"  + bonus (always paid): {v.qty}x {v.name} — {val}")
     return "\n".join(lines)
 
@@ -152,9 +159,10 @@ def run_console(*, backend: str | None = None, refresh: bool = False) -> int:
     from aldur_appraiser.vision.capture import open_capture
 
     s = _prepare(backend, refresh=refresh)
+    dr = divine_rate(s.cached.table)
 
     def _print(appraisal):
-        print(render_console(appraisal.result, base=s.pc.base, stale=s.cached.stale) + "\n")
+        print(render_console(appraisal.result, base=s.pc.base, stale=s.cached.stale, dr=dr) + "\n")
 
     loop = _make_loop(s, on_result=_print, on_hide=lambda: print("(panel closed)\n"))
     print(f"aldur-appraiser running (backend={s.backend}, league={s.pc.league}, base={s.pc.base}).")
@@ -188,16 +196,17 @@ def run_overlay(*, backend: str | None = None, style: str = "corner", refresh: b
     s = _prepare(backend, refresh=refresh)
     app = QApplication([])
     stale = s.cached.stale
+    dr = divine_rate(s.cached.table)
 
     if style == "inline":
-        from aldur_appraiser.icons import base_icon_path
+        from aldur_appraiser.icons import currency_icon_paths
 
-        icon = base_icon_path(s.pc.realm, s.pc.league)  # base-currency icon (best-effort)
-        overlay = build_inline_overlay(s.pc.base, icon_path=icon)
+        icons = currency_icon_paths(s.pc.realm, s.pc.league)  # {exalted,divine} best-effort
+        overlay = build_inline_overlay(s.pc.base, icon_paths=icons, divine_rate=dr)
         on_result = lambda a: overlay.post_rows(a.rows, a.anchor)  # noqa: E731
     else:
         overlay = build_overlay(s.pc.base)
-        on_result = lambda a: overlay.post_result(a.result, stale, a.anchor)  # noqa: E731
+        on_result = lambda a: overlay.post_result(a.result, stale, a.anchor, dr)  # noqa: E731
 
     def worker() -> None:
         try:

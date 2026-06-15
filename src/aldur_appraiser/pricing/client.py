@@ -62,20 +62,34 @@ def list_currency_categories(
             client.close()
 
 
-def fetch_base_icon_url(
+def fetch_currency_icon_urls(
     realm: str, league: str, *, client: httpx.Client | None = None
-) -> str | None:
-    """URL of the league's base-currency icon (e.g. the Exalted Orb image)."""
+) -> dict[str, str]:
+    """Icon URLs for the league's denominations: {'exalted': url, 'divine': url}.
+
+    (Keys are the display units used by format_value; missing ones are omitted.)
+    """
     owns = client is None
     client = client or httpx.Client(timeout=DEFAULT_TIMEOUT)
     try:
         for lg in _get(client, f"/{realm}/Leagues"):
             if lg.get("Value") == league:
-                return lg.get("BaseCurrencyIconUrl") or None
-        return None
+                urls = {
+                    "exalted": lg.get("BaseCurrencyIconUrl"),
+                    "divine": lg.get("DivineCurrencyIconUrl"),
+                }
+                return {k: v for k, v in urls.items() if v}
+        return {}
     finally:
         if owns:
             client.close()
+
+
+def fetch_base_icon_url(
+    realm: str, league: str, *, client: httpx.Client | None = None
+) -> str | None:
+    """URL of the league's base-currency icon (e.g. the Exalted Orb image)."""
+    return fetch_currency_icon_urls(realm, league, client=client).get("exalted")
 
 
 def current_league(realm: str = "poe2", *, client: httpx.Client | None = None) -> str:

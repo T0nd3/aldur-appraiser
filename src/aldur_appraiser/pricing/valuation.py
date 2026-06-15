@@ -35,6 +35,21 @@ class EvalResult:
         return next((v for v in self.items if v.is_best), None)
 
 
+def format_value(
+    total: float, divine_rate: float | None, *, base_unit: str = "exalted"
+) -> tuple[float, str]:
+    """Pick a friendly denomination: small values in the base unit, large ones in
+    Divine. Returns (value, unit). divine_rate = exalted (base) per Divine."""
+    if divine_rate and divine_rate > 0 and total >= divine_rate:
+        return total / divine_rate, "divine"
+    return total, base_unit
+
+
+def divine_rate(prices: PriceTable) -> float | None:
+    """Exalted (base) per Divine Orb, used to switch big values to Divine."""
+    return prices.get("Divine Orb")
+
+
 def value_one(qty: int, name: str, prices: PriceTable, *, is_bonus: bool = False) -> Valuation:
     """Value a single (qty, name) against the price table."""
     unit = prices.get(name)
