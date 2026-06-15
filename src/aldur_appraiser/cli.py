@@ -1,0 +1,102 @@
+"""Command-line interface for the pricing core (game-independent).
+
+    appraiser price "Divine Orb" 3            # value a reward option
+    appraiser price "divin orb" 3 --fuzzy     # fuzzy-snap a noisy name
+    appraiser table --top 15                  # dump the price table
+    appraiser                                 # no-op (Phase-0 smoke test)
+"""
+
+from __future__ import annotations
+
+import argparse
+import sys
+
+from rapidfuzz import process
+
+from aldur_appraiser.config import load_config
+from aldur_appraiser.pricing.cache import get_or_fetch
+from aldur_appraiser.pricing.client import PricingError
+from aldur_appraiser.pricing.valuation import evaluate
+
+
+def _load_prices(args: argparse.Namespace):
+    cfg = load_config().pricing
+    league = args.league or cfg.league
+    base = args.base or cfg.base
+    return get_or_fetch(
+        league,
+        base,
+        ttl_minutes=cfg.cache_ttl_minutes,
+        realm=cfg.realm,
+        categories=cfg.categories,
+    ), base
+
+
+def _snap(name: str, names, *, cutoff: int = 80) -> str | None:
+    match = process.extractOne(name, names, score_cutoff=cutoff)
+    return match[0] if match else None
+
+
+def cmd_price(args: argparse.Namespace) -> int:
+    cached, base = _load_prices(args)
+    name = args.name
+    if name not in cached.table and args.fuzzy:
+        snapped = _snap(name, list(cached.table))
+        if snapped:
+            print(f"(snapped {name!r} -> {snapped!r})")
+            name = snapped
+
+    result = evaluate([(args.qty, name)], cached.table)
+    v = result.items[0]
+    stale = " [STALE]" if cached.stale else ""
+    if v.known:
+        print(f"{v.qty}x {v.name} = {v.total:.2f} {base} ({v.unit:.4f} each){stale}")
+    else:
+        print(f"{v.qty}x {v.name} = unknown (no market price){stale}")
+    return 0
+
+
+def cmd_table(args: argparse.Namespace) -> int:
+    cached, base = _load_prices(args)
+    rows = sorted(cached.table.items(), key=lambda kv: kv[1], reverse=True)
+    if args.top:
+        rows = rows[: args.top]
+    stale = " [STALE CACHE]" if cached.stale else ""
+    print(f"{len(cached.table)} currencies, base={base}, age={cached.age_minutes:.0f}min{stale}")
+    for name, price in rows:
+        print(f"  {name:<28} {price:>14.4f}")
+    return 0
+
+
+def build_parser() -> argparse.ArgumentParser:
+    p = argparse.ArgumentParser(prog="appraiser", description=__doc__)
+    p.add_argument("--league", help="override league (default: config)")
+    p.add_argument("--base", help="override base currency (default: config)")
+    sub = p.add_subparsers(dest="command")
+
+    pp = sub.add_parser("price", help="value a single reward option")
+    pp.add_argument("name", help="currency name (canonical)")
+    pp.add_argument("qty", type=int, help="quantity")
+    pp.add_argument("--fuzzy", action="store_true", help="fuzzy-snap a noisy name")
+    pp.set_defaults(func=cmd_price)
+
+    pt = sub.add_parser("table", help="dump the price table")
+    pt.add_argument("--top", type=int, default=0, help="show only top N by value")
+    pt.set_defaults(func=cmd_table)
+    return p
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = build_parser().parse_args(argv)
+    if not getattr(args, "command", None):
+        print("aldur-appraiser: pricing core ready. Try 'appraiser table --top 10'.")
+        return 0
+    try:
+        return args.func(args)
+    except PricingError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
