@@ -18,6 +18,7 @@ for pkg in ("rapidocr_onnxruntime", "onnxruntime"):
 datas += [
     ("config.toml", "."),
     ("assets/templates", "assets/templates"),
+    ("assets/icon.png", "assets"),  # tray icon at runtime
 ]
 
 # These are imported lazily (inside functions) so PyInstaller's static analysis
@@ -53,6 +54,7 @@ exe = EXE(
     a.datas,
     [],
     name="aldur-appraiser",
+    icon="assets/icon.ico",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

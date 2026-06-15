@@ -41,6 +41,12 @@ def _is_mod_like(text: str) -> bool:
     return bool(_MOD_CHARS.search(text)) or len(text.split()) > 6
 
 
+def _unleveled_gem(snapped: str, raw_name: str) -> bool:
+    """A gem priced per level ('… (Level N)') but whose reward text shows no
+    level. We won't guess the level -> treat as unknown ('?') instead."""
+    return "(level" in snapped.lower() and not any(c.isdigit() for c in raw_name)
+
+
 def parse_row(
     raw: str,
     dictionary: Iterable[str],
@@ -85,10 +91,10 @@ def parse_row(
     if not had_qty and _is_mod_like(raw_name):
         return None
     name = snap_name(raw_name, dictionary, score_cutoff=score_cutoff)
-    if name is not None:
+    if name is not None and not _unleveled_gem(name, raw_name):
         return qty, name
     if keep_unknown and len(raw_name) >= 3:
-        return qty, raw_name
+        return qty, raw_name  # unknown (e.g. a gem whose level isn't shown -> "?")
     return None
 
 

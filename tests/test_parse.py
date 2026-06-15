@@ -73,6 +73,20 @@ def test_keep_unknown_keeps_qtyless_reward():
     assert parse_row("Uncut Support Gem", DICT) is None
 
 
+def test_unleveled_gem_stays_unknown():
+    dictionary = DICT + ["Uncut Support Gem (Level 3)", "Uncut Support Gem (Level 5)"]
+    # no level shown -> don't guess a (Level N) variant; keep the raw name (unknown)
+    assert parse_row("Uncut Support Gem", dictionary, keep_unknown=True) == (
+        1,
+        "Uncut Support Gem",
+    )
+    # a level IS shown -> snapping to the matching leveled variant is fine
+    assert parse_row("1x Uncut Support Gem (Level 5)", dictionary) == (
+        1,
+        "Uncut Support Gem (Level 5)",
+    )
+
+
 def test_keep_unknown_rejects_tooltip_modifier_text():
     # hover tooltips OCR as modifier text; quantity-less mod lines must not
     # become options (they carry digits/%/+ or run long)

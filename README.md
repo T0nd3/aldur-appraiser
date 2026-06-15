@@ -1,5 +1,7 @@
 # Aldur Appraiser
 
+<img src="assets/icon.png" width="96" align="right" alt="Aldur Appraiser icon">
+
 A **passive, read-only** overlay for Path of Exile 2 (league *Runes of Aldur*). It reads the
 *Runeshape Combinations* panel of the Ezomyte Remnant via screen capture, prices each reward
 option, and highlights the most valuable one — as a decision aid *before* you pick.

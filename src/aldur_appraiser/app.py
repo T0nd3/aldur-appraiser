@@ -188,30 +188,33 @@ def run_overlay(*, backend: str | None = None, style: str = "corner", refresh: b
         os.environ.setdefault("QT_QPA_PLATFORM", "xcb")
 
     from PySide6.QtCore import QObject, QTimer, Signal
+    from PySide6.QtGui import QIcon
     from PySide6.QtWidgets import QApplication
 
-    from aldur_appraiser.icons import base_icon_path, currency_icon_paths
+    from aldur_appraiser.icons import currency_icon_paths
+    from aldur_appraiser.resources import resource_path
     from aldur_appraiser.vision.capture import open_capture
     from aldur_appraiser.vision.overlay import build_inline_overlay, build_overlay
 
     s = _prepare(backend, refresh=refresh)
     app = QApplication([])
     app.setQuitOnLastWindowClosed(False)  # live in the tray, not tied to a window
+    app_icon = resource_path("assets/icon.png")
+    app_icon = str(app_icon) if app_icon.exists() else None
+    if app_icon:
+        app.setWindowIcon(QIcon(app_icon))
     stale = s.cached.stale
     dr = divine_rate(s.cached.table)
 
-    tray_icon_path = None
     if style == "inline":
         icons = currency_icon_paths(s.pc.realm, s.pc.league)  # {exalted,divine} best-effort
-        tray_icon_path = icons.get("exalted")
         overlay = build_inline_overlay(s.pc.base, icon_paths=icons, divine_rate=dr)
         on_result = lambda a: overlay.post_rows(a.rows, a.anchor)  # noqa: E731
     else:
-        tray_icon_path = base_icon_path(s.pc.realm, s.pc.league)
         overlay = build_overlay(s.pc.base)
         on_result = lambda a: overlay.post_result(a.result, stale, a.anchor, dr)  # noqa: E731
 
-    tray = _make_tray(app, s, tray_icon_path)
+    tray = _make_tray(app, s, app_icon)
 
     # Bridge worker-thread errors to the GUI thread (tray notification).
     class _Bridge(QObject):

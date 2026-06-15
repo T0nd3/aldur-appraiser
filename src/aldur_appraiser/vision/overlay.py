@@ -135,8 +135,8 @@ def build_inline_overlay(base: str, *, icon_paths=None, divine_rate=None):
                 if v.known:
                     val, unit = format_value(v.total, self.divine_rate, base_unit=self.base)
                     icon = self._icons.get(unit)
-                    # show the value with the unit name (plus the icon if available)
-                    num = f"{val:.1f} {unit}"
+                    # value + icon; fall back to the unit name only if no icon
+                    num = f"{val:.1f}" if icon else f"{val:.1f} {unit}"
                     label = f"+{num}" if v.is_bonus else num
                     color = DIM if v.is_bonus else (BEST if v.is_best else KNOWN)
                 else:
