@@ -71,10 +71,10 @@ def create_venv() -> None:
 
 
 def install_package() -> None:
-    say("Installing aldur-appraiser with the vision extra")
+    say("Installing aldur-appraiser with the vision + overlay extras")
     py = str(venv_python())
     run([py, "-m", "pip", "install", "--upgrade", "pip"])
-    run([py, "-m", "pip", "install", "-e", ".[vision]"])
+    run([py, "-m", "pip", "install", "-e", ".[vision,overlay]"])
 
 
 def _system_has_gstreamer() -> bool:

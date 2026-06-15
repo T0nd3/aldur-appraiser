@@ -10,6 +10,7 @@ content is unchanged, which keeps CPU low at the poll rate.
 
 from __future__ import annotations
 
+import sys
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -105,11 +106,18 @@ def render_console(result: EvalResult, *, base: str, stale: bool = False) -> str
     return "\n".join(lines)
 
 
-def run_app(*, backend: str | None = None) -> int:
-    """Entry point for `appraiser run`: wire everything and loop on the console."""
+@dataclass
+class _Setup:
+    pc: object
+    cached: object
+    poll_fps: float
+    backend: str
+
+
+def _prepare(backend: str | None) -> _Setup:
     from aldur_appraiser.config import load_config
     from aldur_appraiser.pricing.cache import get_or_fetch
-    from aldur_appraiser.vision.capture import default_backend, open_capture
+    from aldur_appraiser.vision.capture import default_backend
 
     cfg = load_config()
     pc = cfg.pricing
@@ -121,24 +129,99 @@ def run_app(*, backend: str | None = None) -> int:
         categories=pc.categories,
     )
     poll_fps = float(cfg.raw.get("vision", {}).get("poll_fps", 3))
-    chosen = backend or default_backend()
+    return _Setup(pc=pc, cached=cached, poll_fps=poll_fps, backend=backend or default_backend())
 
-    loop = AppraiserLoop(
-        prices=cached.table,
+
+def _make_loop(s: _Setup, on_result, on_hide) -> AppraiserLoop:
+    return AppraiserLoop(
+        prices=s.cached.table,
         detector=PanelDetector(),
         engine=ocr.get_engine(),
-        on_result=lambda r: print(render_console(r, base=pc.base, stale=cached.stale) + "\n"),
-        on_hide=lambda: print("(panel closed)\n"),
+        on_result=on_result,
+        on_hide=on_hide,
     )
 
-    print(f"aldur-appraiser running (backend={chosen}, league={pc.league}, base={pc.base}).")
+
+def run_console(*, backend: str | None = None) -> int:
+    from aldur_appraiser.vision.capture import open_capture
+
+    s = _prepare(backend)
+    loop = _make_loop(
+        s,
+        on_result=lambda r: print(render_console(r, base=s.pc.base, stale=s.cached.stale) + "\n"),
+        on_hide=lambda: print("(panel closed)\n"),
+    )
+    print(f"aldur-appraiser running (backend={s.backend}, league={s.pc.league}, base={s.pc.base}).")
     print("Open a Runeshape Combinations panel in-game. Ctrl+C to stop.\n")
     try:
-        with open_capture(backend=chosen) as cap:
+        with open_capture(backend=s.backend) as cap:
             if hasattr(cap, "assert_capturable"):
                 cap.assert_capturable()
-            loop.run(cap, poll_fps=poll_fps)
+            loop.run(cap, poll_fps=s.poll_fps)
     except KeyboardInterrupt:
         print("\nstopped.")
-        return 0
     return 0
+
+
+def run_overlay(*, backend: str | None = None) -> int:
+    import os
+    import signal
+    import threading
+
+    # On Wayland, always-on-top + click-through are honored more reliably under
+    # XWayland (xcb) than the native wayland Qt platform; let users override.
+    if sys.platform.startswith("linux") and os.environ.get("WAYLAND_DISPLAY"):
+        os.environ.setdefault("QT_QPA_PLATFORM", "xcb")
+
+    from PySide6.QtCore import QTimer
+    from PySide6.QtWidgets import QApplication
+
+    from aldur_appraiser.vision.capture import open_capture
+    from aldur_appraiser.vision.overlay import build_overlay
+
+    s = _prepare(backend)
+    app = QApplication([])
+    overlay = build_overlay(s.pc.base)
+    stale = s.cached.stale
+
+    def worker() -> None:
+        try:
+            loop = _make_loop(
+                s,
+                on_result=lambda r: overlay.post_result(r, stale),
+                on_hide=overlay.post_hide,
+            )
+            with open_capture(backend=s.backend) as cap:
+                if hasattr(cap, "assert_capturable"):
+                    cap.assert_capturable()
+                loop.run(cap, poll_fps=s.poll_fps)
+        except Exception as exc:  # noqa: BLE001 - surface backend errors, then quit
+            print(f"capture error: {type(exc).__name__}: {exc}", file=sys.stderr)
+            app.quit()
+
+    threading.Thread(target=worker, daemon=True).start()
+
+    print(f"aldur-appraiser overlay running (backend={s.backend}, league={s.pc.league}).")
+    print("Open a Runeshape Combinations panel in-game. Ctrl+C to stop.")
+    # Let Python process SIGINT while the Qt event loop runs.
+    signal.signal(signal.SIGINT, lambda *_: app.quit())
+    timer = QTimer()
+    timer.start(200)
+    timer.timeout.connect(lambda: None)
+    return app.exec()
+
+
+def run_app(*, backend: str | None = None, mode: str = "auto") -> int:
+    """Entry point for `appraiser run`. mode: auto | overlay | console."""
+    if mode == "console":
+        return run_console(backend=backend)
+    try:
+        import PySide6  # noqa: F401
+    except ImportError:
+        if mode == "overlay":
+            print("overlay requested but PySide6 is not installed "
+                  '(pip install -e ".[overlay]")', file=sys.stderr)
+            return 1
+        print("overlay unavailable (PySide6 not installed); using console.\n")
+        return run_console(backend=backend)
+    return run_overlay(backend=backend)

@@ -92,7 +92,8 @@ def cmd_image(args: argparse.Namespace) -> int:
 def cmd_run(args: argparse.Namespace) -> int:
     from aldur_appraiser.app import run_app
 
-    return run_app(backend=args.backend)
+    mode = "console" if args.console else ("overlay" if args.overlay else "auto")
+    return run_app(backend=args.backend, mode=mode)
 
 
 def cmd_capture_test(args: argparse.Namespace) -> int:
@@ -154,8 +155,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     pi.set_defaults(func=cmd_image)
 
-    pr = sub.add_parser("run", help="live loop: capture + detect + appraise on the console")
+    pr = sub.add_parser("run", help="live loop: capture + detect + appraise (overlay by default)")
     pr.add_argument("--backend", choices=["portal", "mss"], help="force a capture backend")
+    grp = pr.add_mutually_exclusive_group()
+    grp.add_argument("--overlay", action="store_true", help="force the Qt overlay HUD")
+    grp.add_argument("--console", action="store_true", help="force plain console output")
     pr.set_defaults(func=cmd_run)
 
     pc = sub.add_parser("capture-test", help="grab one screen frame (tests the capture backend)")

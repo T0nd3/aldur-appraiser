@@ -31,6 +31,10 @@ vision = [
 ]
 # Optional OCR fallback; requires the tesseract binary on the system.
 tesseract = ["pytesseract>=0.3.10"]
+# Overlay HUD. Qt (pip wheel, no system dependency) — tkinter isn't shipped on
+# atomic distros and needs a system layer; Qt also handles frameless/always-on-
+# top/translucent/click-through better on Wayland.
+overlay = ["PySide6-Essentials>=6.6"]
 dev = ["pytest>=8.0", "ruff>=0.4"]
 
 [project.scripts]

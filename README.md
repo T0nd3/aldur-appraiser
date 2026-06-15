@@ -10,7 +10,9 @@ option, and highlights the most valuable one — as a decision aid *before* you 
 
 ## Status
 
-Phase 1 (pricing core) is implemented and runs game-independently on Windows and Linux.
+Pricing, OCR, panel detection, live capture (mss on Windows/X11, xdg-desktop-portal +
+PipeWire on Wayland), the capture→detect→OCR→price loop, and a Qt corner-HUD overlay are
+implemented. Cross-platform (Windows / Linux). Live in-game tuning is ongoing.
 
 ## Install
 
@@ -29,7 +31,7 @@ python scripts/setup.py --check     # only re-run the environment checks
 ```bash
 python -m venv .venv
 . .venv/bin/activate                # Windows: .venv\Scripts\activate
-pip install -e ".[vision]"          # pricing + RapidOCR + OpenCV + mss (all wheels)
+pip install -e ".[vision,overlay]"  # pricing + RapidOCR + OpenCV + mss + Qt overlay (wheels)
 pip install -e ".[tesseract]"       # optional OCR fallback (needs the tesseract binary)
 ```
 </details>
