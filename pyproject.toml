@@ -36,6 +36,8 @@ tesseract = ["pytesseract>=0.3.10"]
 # top/translucent/click-through better on Wayland.
 overlay = ["PySide6-Essentials>=6.6"]
 dev = ["pytest>=8.0", "ruff>=0.4"]
+# Frozen Windows build (used in CI).
+build = ["pyinstaller>=6.6"]
 
 [project.scripts]
 appraiser = "aldur_appraiser.cli:main"

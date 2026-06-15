@@ -13,10 +13,12 @@ from pathlib import Path
 
 from platformdirs import user_cache_dir, user_config_dir
 
+from aldur_appraiser.resources import resource_path
+
 APP_NAME = "aldur-appraiser"
 
-# Repo-bundled default config (used when no user config exists).
-_REPO_CONFIG = Path(__file__).resolve().parents[2] / "config.toml"
+# Bundled default config (repo tree, or the PyInstaller bundle when frozen).
+_REPO_CONFIG = resource_path("config.toml")
 
 
 def cache_dir() -> Path:

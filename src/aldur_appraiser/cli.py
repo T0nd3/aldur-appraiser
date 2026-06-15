@@ -92,6 +92,22 @@ def cmd_image(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_selftest(args: argparse.Namespace) -> int:
+    """Offline check that bundled vision deps load (used by the Windows CI)."""
+    import numpy as np
+
+    from aldur_appraiser.vision import ocr
+    from aldur_appraiser.vision.detect import PanelDetector
+
+    PanelDetector()  # loads the detection template from the bundle
+    engine = ocr.get_engine()  # loads RapidOCR + onnxruntime models from the bundle
+    engine.lines(np.zeros((64, 256, 3), dtype=np.uint8))  # exercise inference
+    from PySide6 import QtWidgets  # noqa: F401  -> verify the Qt overlay is bundled
+
+    print("selftest OK: detection template + OCR engine + Qt all loaded")
+    return 0
+
+
 def cmd_run(args: argparse.Namespace) -> int:
     from aldur_appraiser.app import run_app
 
@@ -158,6 +174,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     pi.set_defaults(func=cmd_image)
 
+    sub.add_parser("selftest", help="offline check that bundled vision deps load").set_defaults(
+        func=cmd_selftest
+    )
+
     pr = sub.add_parser("run", help="live loop: capture + detect + appraise (overlay by default)")
     pr.add_argument("--backend", choices=["portal", "mss"], help="force a capture backend")
     grp = pr.add_mutually_exclusive_group()
@@ -178,6 +198,9 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    # Double-clicking the frozen .exe passes no args -> launch the live overlay.
+    if argv is None and len(sys.argv) == 1 and getattr(sys, "frozen", False):
+        argv = ["run"]
     args = build_parser().parse_args(argv)
     if not getattr(args, "command", None):
         print("aldur-appraiser: pricing core ready. Try 'appraiser table --top 10'.")

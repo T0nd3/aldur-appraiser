@@ -1,0 +1,44 @@
+name: build-windows
+
+# Builds a standalone Windows .exe (no Python needed by end users).
+# - manual runs (Actions tab -> Run workflow) for iteration
+# - tag pushes (v*) attach the exe to a GitHub Release
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write   # needed to attach the exe to a release
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"   # broad wheel availability on Windows
+
+      - name: Install package + build deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[vision,overlay,build]"
+
+      - name: Build exe
+        run: pyinstaller --noconfirm aldur-appraiser.spec
+
+      - name: Smoke-test the exe (offline; loads cv2 + RapidOCR models)
+        run: dist\aldur-appraiser.exe selftest
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: aldur-appraiser-windows
+          path: dist/aldur-appraiser.exe
+
+      - name: Attach to release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/aldur-appraiser.exe

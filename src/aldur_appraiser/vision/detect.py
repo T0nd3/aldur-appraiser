@@ -18,11 +18,10 @@ from pathlib import Path
 import cv2
 import numpy as np
 
+from aldur_appraiser.resources import resource_path
 from aldur_appraiser.vision.capture import Region
 
-DEFAULT_TEMPLATE = (
-    Path(__file__).resolve().parents[3] / "assets" / "templates" / "header_runeshape.png"
-)
+DEFAULT_TEMPLATE = resource_path("assets/templates/header_runeshape.png")
 # Calibrated from a live frame: real panels match ~0.9 (downscaled), a
 # non-game desktop produced a 0.75 false positive, so 0.8 separates them.
 # Re-tune once we have a live panel-open capture.
