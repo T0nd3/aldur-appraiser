@@ -73,6 +73,17 @@ def test_keep_unknown_keeps_qtyless_reward():
     assert parse_row("Uncut Support Gem", DICT) is None
 
 
+def test_keep_unknown_rejects_tooltip_modifier_text():
+    # hover tooltips OCR as modifier text; quantity-less mod lines must not
+    # become options (they carry digits/%/+ or run long)
+    assert parse_row("+12% to Lightning Resistance", DICT, keep_unknown=True) is None
+    assert parse_row("Grants 25% increased Rarity", DICT, keep_unknown=True) is None
+    long_mod = "adds one to maximum number of allocated runes"
+    assert parse_row(long_mod, DICT, keep_unknown=True) is None
+    # but a quantity-anchored row with a stray number is still kept
+    assert parse_row("20x Chaos Orb", DICT) == (20, "Chaos Orb")
+
+
 def test_parse_rows_drops_unparseable():
     rows = [
         "1x Orb of Augmentation",

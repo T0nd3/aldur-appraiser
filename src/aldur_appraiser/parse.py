@@ -31,6 +31,16 @@ def _parse_qty(token: str) -> int | None:
     return int(fixed) if fixed.isdigit() else None
 
 
+# Hover tooltips show modifier text ("+12% to Lightning Resistance", "Grants
+# 25% increased ..."); such lines carry digits/%/+ or run long, unlike the short
+# Title-Case reward names. Used only to reject quantity-less lines.
+_MOD_CHARS = re.compile(r"[0-9%+]")
+
+
+def _is_mod_like(text: str) -> bool:
+    return bool(_MOD_CHARS.search(text)) or len(text.split()) > 6
+
+
 def parse_row(
     raw: str,
     dictionary: Iterable[str],
@@ -55,17 +65,24 @@ def parse_row(
         if qty is None or qty < 1 or qty > MAX_QTY:
             return None
         raw_name = match.group(2)
+        had_qty = True
     elif keep_unknown:
         # Inside the reward ROI every row is an option; some (e.g. gems) have no
         # "Nx" prefix -> treat as quantity 1 rather than dropping them.
         qty = 1
         raw_name = s
+        had_qty = False
     else:
         # Full-frame mode: the "Nx" anchor is our noise filter -> require it.
         return None
 
     raw_name = raw_name.strip().strip(".,:;")
     if not raw_name:
+        return None
+    # A quantity-less line that looks like modifier text (e.g. a hover tooltip:
+    # "+12% to Lightning Resistance") is not a reward. Reject it *before* snapping
+    # so it can't fuzzy-match a currency name by accident.
+    if not had_qty and _is_mod_like(raw_name):
         return None
     name = snap_name(raw_name, dictionary, score_cutoff=score_cutoff)
     if name is not None:
