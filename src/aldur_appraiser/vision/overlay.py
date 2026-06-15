@@ -52,6 +52,105 @@ def result_to_html(result: EvalResult, base: str, *, stale: bool = False) -> str
     return "".join(rows)
 
 
+def build_inline_overlay(base: str):
+    """Full-monitor, transparent, click-through overlay that paints a value chip
+    at the end of each reward row (positions mapped from the OCR boxes).
+
+    Receives per-row appraisals (with OCR boxes in ROI pixels) plus the anchor
+    (ROI rect + frame size) and maps each row to monitor-local coordinates.
+    """
+    from PySide6.QtCore import QRectF, Qt, Signal, Slot
+    from PySide6.QtGui import QColor, QFont, QPainter
+    from PySide6.QtWidgets import QApplication, QWidget
+
+    BEST = QColor("#7CFC8A")
+    KNOWN = QColor("#e8e8e8")
+    DIM = QColor("#9a9a9a")
+
+    class InlineOverlay(QWidget):
+        _show = Signal(object, object)
+        _hide = Signal()
+
+        def __init__(self):
+            super().__init__()
+            self.base = base
+            self._chips: list[tuple[str, float, float, QColor]] = []
+            flags = Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool
+            if sys.platform.startswith("linux"):
+                flags |= Qt.X11BypassWindowManagerHint
+            self.setWindowFlags(flags)
+            self.setAttribute(Qt.WA_TranslucentBackground, True)
+            self.setAttribute(Qt.WA_ShowWithoutActivating, True)
+            self.setWindowFlag(Qt.WindowTransparentForInput, True)
+            self._font = QFont("DejaVu Sans")
+            self._font.setPixelSize(18)
+            self._font.setBold(True)
+            self._show.connect(self._apply_show)
+            self._hide.connect(self._apply_hide)
+
+        def post_rows(self, rows, anchor) -> None:
+            self._show.emit(rows, anchor)
+
+        def post_hide(self) -> None:
+            self._hide.emit()
+
+        def _screen_for_frame(self, fw: int, fh: int):
+            for s in QApplication.screens():
+                g = s.geometry()
+                if g.width() == fw and g.height() == fh:
+                    return s
+            return QApplication.primaryScreen()
+
+        @Slot(object, object)
+        def _apply_show(self, rows, anchor) -> None:
+            rl, rt, rw, rh, fw, fh = anchor
+            self.setGeometry(self._screen_for_frame(fw, fh).geometry())
+            chips = []
+            for r in rows:
+                v = r.valuation
+                if r.box is None:
+                    continue
+                x = rl + r.box[2] + 10            # just right of the row text
+                y = rt + (r.box[1] + r.box[3]) / 2
+                if v.known:
+                    label = f"{v.total:.1f} {self.base}"
+                    color = DIM if v.is_bonus else (BEST if v.is_best else KNOWN)
+                    if v.is_bonus:
+                        label = f"bonus {label}"
+                else:
+                    label, color = "?", DIM
+                chips.append((label, float(x), float(y), color))
+            self._chips = chips
+            self.update()
+            self.show()
+            self.raise_()
+
+        @Slot()
+        def _apply_hide(self) -> None:
+            self._chips = []
+            self.hide()
+
+        def paintEvent(self, _event) -> None:
+            if not self._chips:
+                return
+            p = QPainter(self)
+            p.setRenderHint(QPainter.Antialiasing)
+            p.setFont(self._font)
+            fm = p.fontMetrics()
+            for label, x, y, color in self._chips:
+                w = fm.horizontalAdvance(label) + 18
+                h = fm.height() + 8
+                rect = QRectF(x, y - h / 2, w, h)
+                p.setBrush(QColor(20, 18, 14, 225))
+                p.setPen(QColor(90, 74, 42))
+                p.drawRoundedRect(rect, 7, 7)
+                p.setPen(color)
+                p.drawText(rect, Qt.AlignCenter, label)
+            p.end()
+
+    return InlineOverlay()
+
+
 def build_overlay(base: str, *, position: str = "top-right", opacity: float = 0.92):
     """Construct the overlay widget (imports PySide6 lazily). Returns the widget.
 

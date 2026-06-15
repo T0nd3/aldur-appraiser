@@ -112,7 +112,8 @@ def cmd_run(args: argparse.Namespace) -> int:
     from aldur_appraiser.app import run_app
 
     mode = "console" if args.console else ("overlay" if args.overlay else "auto")
-    return run_app(backend=args.backend, mode=mode)
+    style = "inline" if args.inline else "corner"
+    return run_app(backend=args.backend, mode=mode, style=style)
 
 
 def cmd_capture_test(args: argparse.Namespace) -> int:
@@ -183,6 +184,11 @@ def build_parser() -> argparse.ArgumentParser:
     grp = pr.add_mutually_exclusive_group()
     grp.add_argument("--overlay", action="store_true", help="force the Qt overlay HUD")
     grp.add_argument("--console", action="store_true", help="force plain console output")
+    pr.add_argument(
+        "--inline",
+        action="store_true",
+        help="inline per-row value chips next to the panel (instead of a corner HUD)",
+    )
     pr.set_defaults(func=cmd_run)
 
     pc = sub.add_parser("capture-test", help="grab one screen frame (tests the capture backend)")

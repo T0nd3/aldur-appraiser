@@ -35,7 +35,8 @@ class EvalResult:
         return next((v for v in self.items if v.is_best), None)
 
 
-def _value(qty: int, name: str, prices: PriceTable, *, is_bonus: bool = False) -> Valuation:
+def value_one(qty: int, name: str, prices: PriceTable, *, is_bonus: bool = False) -> Valuation:
+    """Value a single (qty, name) against the price table."""
     unit = prices.get(name)
     if unit is None:
         return Valuation(name=name, qty=qty, unit=None, total=None, known=False, is_bonus=is_bonus)
@@ -55,7 +56,7 @@ def evaluate(
     The bonus reward is paid regardless of which option is picked, so it must not
     affect the ranking, the BEST marker, or the incomplete flag.
     """
-    valuations = [_value(qty, name, prices) for qty, name in options]
+    valuations = [value_one(qty, name, prices) for qty, name in options]
     known = [v for v in valuations if v.known]
     unknown = [v for v in valuations if not v.known]
     known.sort(key=lambda v: v.total, reverse=True)
@@ -64,5 +65,5 @@ def evaluate(
         top = known[0]
         known[0] = Valuation(**{**top.__dict__, "is_best": True})
 
-    bonus_items = [_value(qty, name, prices, is_bonus=True) for qty, name in (bonus or [])]
+    bonus_items = [value_one(qty, name, prices, is_bonus=True) for qty, name in (bonus or [])]
     return EvalResult(items=known + unknown, incomplete=bool(unknown), bonus_items=bonus_items)

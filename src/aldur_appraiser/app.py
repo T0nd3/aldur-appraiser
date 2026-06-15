@@ -17,7 +17,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from aldur_appraiser.pipeline import appraise_roi
+from aldur_appraiser.pipeline import Appraisal, appraise_roi_rows, rows_to_result
 from aldur_appraiser.pricing.client import PriceTable
 from aldur_appraiser.pricing.valuation import EvalResult
 from aldur_appraiser.vision import ocr
@@ -44,10 +44,9 @@ class AppraiserLoop:
     prices: PriceTable
     detector: PanelDetector
     engine: ocr.OcrEngine
-    # on_result(result, anchor): anchor = (roi_left, roi_top, roi_w, roi_h,
-    # frame_w, frame_h) in captured-frame pixels, or None. Lets the overlay sit
-    # next to the panel; the console renderer ignores it.
-    on_result: Callable[[EvalResult, tuple | None], None]
+    # on_result(appraisal): carries the ranked result (corner/console), per-row
+    # data (inline overlay), and the anchor mapping ROI pixels to the screen.
+    on_result: Callable[[Appraisal], None]
     on_hide: Callable[[], None]
     score_cutoff: int = 80
 
@@ -72,11 +71,12 @@ class AppraiserLoop:
 
         self._last_sig = sig
         self._panel_visible = True
-        result = appraise_roi(
+        rows = appraise_roi_rows(
             roi, self.prices, engine=self.engine, score_cutoff=self.score_cutoff
         )
+        result = rows_to_result(rows)
         anchor = (rect.left, rect.top, rect.width, rect.height, frame.shape[1], frame.shape[0])
-        self.on_result(result, anchor)
+        self.on_result(Appraisal(result=result, rows=rows, anchor=anchor))
         return result
 
     def run(self, capture, *, poll_fps: float = 3.0, region=None) -> None:
@@ -153,8 +153,8 @@ def run_console(*, backend: str | None = None) -> int:
 
     s = _prepare(backend)
 
-    def _print(r, _anchor):
-        print(render_console(r, base=s.pc.base, stale=s.cached.stale) + "\n")
+    def _print(appraisal):
+        print(render_console(appraisal.result, base=s.pc.base, stale=s.cached.stale) + "\n")
 
     loop = _make_loop(s, on_result=_print, on_hide=lambda: print("(panel closed)\n"))
     print(f"aldur-appraiser running (backend={s.backend}, league={s.pc.league}, base={s.pc.base}).")
@@ -169,7 +169,7 @@ def run_console(*, backend: str | None = None) -> int:
     return 0
 
 
-def run_overlay(*, backend: str | None = None) -> int:
+def run_overlay(*, backend: str | None = None, style: str = "corner") -> int:
     import os
     import signal
     import threading
@@ -183,12 +183,18 @@ def run_overlay(*, backend: str | None = None) -> int:
     from PySide6.QtWidgets import QApplication
 
     from aldur_appraiser.vision.capture import open_capture
-    from aldur_appraiser.vision.overlay import build_overlay
+    from aldur_appraiser.vision.overlay import build_inline_overlay, build_overlay
 
     s = _prepare(backend)
     app = QApplication([])
-    overlay = build_overlay(s.pc.base)
     stale = s.cached.stale
+
+    if style == "inline":
+        overlay = build_inline_overlay(s.pc.base)
+        on_result = lambda a: overlay.post_rows(a.rows, a.anchor)  # noqa: E731
+    else:
+        overlay = build_overlay(s.pc.base)
+        on_result = lambda a: overlay.post_result(a.result, stale, a.anchor)  # noqa: E731
 
     def worker() -> None:
         try:
@@ -197,11 +203,7 @@ def run_overlay(*, backend: str | None = None) -> int:
             with open_capture(backend=s.backend) as cap:
                 if hasattr(cap, "assert_capturable"):
                     cap.assert_capturable()
-                loop = _make_loop(
-                    s,
-                    on_result=lambda r, anchor: overlay.post_result(r, stale, anchor),
-                    on_hide=overlay.post_hide,
-                )
+                loop = _make_loop(s, on_result=on_result, on_hide=overlay.post_hide)
                 loop.run(cap, poll_fps=s.poll_fps)
         except Exception as exc:  # noqa: BLE001 - surface backend errors, then quit
             print(f"capture error: {type(exc).__name__}: {exc}", file=sys.stderr)
@@ -219,7 +221,7 @@ def run_overlay(*, backend: str | None = None) -> int:
     return app.exec()
 
 
-def run_app(*, backend: str | None = None, mode: str = "auto") -> int:
+def run_app(*, backend: str | None = None, mode: str = "auto", style: str = "corner") -> int:
     """Entry point for `appraiser run`. mode: auto | overlay | console."""
     if mode == "console":
         return run_console(backend=backend)
@@ -232,4 +234,4 @@ def run_app(*, backend: str | None = None, mode: str = "auto") -> int:
             return 1
         print("overlay unavailable (PySide6 not installed); using console.\n")
         return run_console(backend=backend)
-    return run_overlay(backend=backend)
+    return run_overlay(backend=backend, style=style)

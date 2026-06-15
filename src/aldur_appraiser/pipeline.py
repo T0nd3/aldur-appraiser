@@ -10,15 +10,34 @@ robustness/perf optimisation, not a correctness requirement here.
 from __future__ import annotations
 
 import statistics
+from dataclasses import dataclass, replace
 from typing import Protocol
 
 import numpy as np
 from rapidfuzz import fuzz
 
-from aldur_appraiser.parse import parse_rows
+from aldur_appraiser.parse import parse_row, parse_rows
 from aldur_appraiser.pricing.client import PriceTable
-from aldur_appraiser.pricing.valuation import EvalResult, evaluate
+from aldur_appraiser.pricing.valuation import EvalResult, Valuation, evaluate, value_one
 from aldur_appraiser.vision.ocr import OcrEngine, OcrLine, get_engine, read_reward_rows
+
+
+@dataclass(frozen=True)
+class RowAppraisal:
+    """One reward row: its valuation plus the OCR box (ROI pixels) for inline UI."""
+
+    valuation: Valuation
+    box: tuple[float, float, float, float] | None
+
+
+@dataclass(frozen=True)
+class Appraisal:
+    """Loop payload: ranked result (corner/console), per-row data (inline), and
+    the anchor (ROI rect + frame size) to map rows to the screen."""
+
+    result: EvalResult
+    rows: list[RowAppraisal]
+    anchor: tuple[int, int, int, int, int, int]
 
 # A reward row separated from the ones above by more than this multiple of the
 # typical row spacing is the bonus reward (sits below a "Bonus Reward" divider).
@@ -63,6 +82,54 @@ def split_bonus(lines: list[OcrLine]) -> tuple[list[OcrLine], list[OcrLine]]:
     return rows, []
 
 
+def appraise_roi_rows(
+    roi: np.ndarray,
+    prices: PriceTable,
+    *,
+    engine: OcrEngine | None = None,
+    score_cutoff: int = 80,
+) -> list[RowAppraisal]:
+    """Per-row appraisal in visual (top-to-bottom) order, keeping OCR boxes.
+
+    Single OCR pass; the bonus row is valued but flagged is_bonus and excluded
+    from the best-choice marking. Used by the inline overlay and as the basis
+    for appraise_roi()."""
+    engine = engine or get_engine()
+    lines = [ln for ln in engine.lines(roi) if ln.text and not _is_ui_label(ln.text)]
+    choice_lines, bonus_lines = split_bonus(lines)
+    keys = list(prices.keys())
+
+    rows: list[RowAppraisal] = []
+    choices: list[Valuation] = []
+    for ln, is_bonus in [(c, False) for c in choice_lines] + [(b, True) for b in bonus_lines]:
+        opt = parse_row(ln.text, keys, score_cutoff=score_cutoff, keep_unknown=True)
+        if opt is None:
+            continue
+        qty, name = opt
+        v = value_one(qty, name, prices, is_bonus=is_bonus)
+        rows.append(RowAppraisal(valuation=v, box=ln.box))
+        if not is_bonus:
+            choices.append(v)
+
+    known = [v for v in choices if v.known]
+    if known:
+        best = max(known, key=lambda v: v.total)
+        rows = [
+            replace(r, valuation=replace(r.valuation, is_best=True)) if r.valuation is best else r
+            for r in rows
+        ]
+    return rows
+
+
+def rows_to_result(rows: list[RowAppraisal]) -> EvalResult:
+    """Build the ranked EvalResult (corner HUD / console) from per-row data."""
+    choices = [r.valuation for r in rows if not r.valuation.is_bonus]
+    bonus = [r.valuation for r in rows if r.valuation.is_bonus]
+    known = sorted((v for v in choices if v.known), key=lambda v: v.total, reverse=True)
+    unknown = [v for v in choices if not v.known]
+    return EvalResult(items=known + unknown, incomplete=bool(unknown), bonus_items=bonus)
+
+
 def appraise_roi(
     roi: np.ndarray,
     prices: PriceTable,
@@ -71,16 +138,8 @@ def appraise_roi(
     score_cutoff: int = 80,
 ) -> EvalResult:
     """OCR a reward-ROI, separate the always-paid bonus, value and rank choices."""
-    engine = engine or get_engine()
-    lines = [ln for ln in engine.lines(roi) if ln.text and not _is_ui_label(ln.text)]
-    choice_lines, bonus_lines = split_bonus(lines)
-    keys = list(prices.keys())
-
-    def _parse(group: list[OcrLine]) -> list[tuple[int, str]]:
-        texts = [ln.text for ln in group]
-        return parse_rows(texts, keys, score_cutoff=score_cutoff, keep_unknown=True)
-
-    return evaluate(_parse(choice_lines), prices, bonus=_parse(bonus_lines))
+    rows = appraise_roi_rows(roi, prices, engine=engine, score_cutoff=score_cutoff)
+    return rows_to_result(rows)
 
 
 def appraise_image(

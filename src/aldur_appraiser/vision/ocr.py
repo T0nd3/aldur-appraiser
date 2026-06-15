@@ -23,6 +23,8 @@ class OcrLine:
     text: str
     conf: float          # 0..1; -1.0 if the engine reports none
     top: float           # y of the line's top edge, for ordering
+    # bounding box (x0, y0, x1, y1) in ROI pixels; None if the engine omits it.
+    box: tuple[float, float, float, float] | None = None
 
 
 class OcrEngine(Protocol):
@@ -66,10 +68,16 @@ class RapidOcrEngine:
         result, _ = self._ocr(proc)
         if not result:
             return []
+        s = self._scale or 1.0
         out: list[OcrLine] = []
         for box, text, score in result:
-            top = min(pt[1] for pt in box)
-            out.append(OcrLine(text=str(text).strip(), conf=float(score), top=float(top)))
+            xs = [pt[0] for pt in box]
+            ys = [pt[1] for pt in box]
+            # OCR ran on the upscaled ROI -> divide back to original ROI pixels
+            bbox = (min(xs) / s, min(ys) / s, max(xs) / s, max(ys) / s)
+            out.append(
+                OcrLine(text=str(text).strip(), conf=float(score), top=bbox[1], box=bbox)
+            )
         out.sort(key=lambda ln: ln.top)
         return out
 
@@ -104,8 +112,13 @@ class TesseractEngine:
             text = " ".join(data["text"][i] for i in idxs)
             confs = [float(data["conf"][i]) for i in idxs if float(data["conf"][i]) >= 0]
             conf = (sum(confs) / len(confs) / 100.0) if confs else -1.0
-            top = min(data["top"][i] for i in idxs)
-            out.append(OcrLine(text=text.strip(), conf=conf, top=float(top)))
+            s = self._scale or 1.0
+            x0 = min(data["left"][i] for i in idxs) / s
+            y0 = min(data["top"][i] for i in idxs) / s
+            x1 = max(data["left"][i] + data["width"][i] for i in idxs) / s
+            y1 = max(data["top"][i] + data["height"][i] for i in idxs) / s
+            box = (float(x0), float(y0), float(x1), float(y1))
+            out.append(OcrLine(text=text.strip(), conf=conf, top=float(y0), box=box))
         out.sort(key=lambda ln: ln.top)
         return out
 

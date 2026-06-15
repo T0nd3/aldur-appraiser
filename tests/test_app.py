@@ -46,7 +46,7 @@ def _make_loop(detector, engine, results, hides):
         prices=PRICES,
         detector=detector,
         engine=engine,
-        on_result=lambda r, _anchor: results.append(r),
+        on_result=lambda a: results.append(a.result),
         on_hide=lambda: hides.append(True),
     )
 
