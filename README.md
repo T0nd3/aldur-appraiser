@@ -80,12 +80,20 @@ pip install -e ".[tesseract]"       # optional OCR fallback (needs the tesseract
 
 - **Windows / macOS / Linux-X11:** uses `mss` (bundled wheel) — nothing extra.
   On macOS grant Screen Recording permission to your terminal.
-- **Linux / Wayland:** `mss` can't read the screen, so capture goes through
-  xdg-desktop-portal + PipeWire. This needs the distro's GStreamer + PyGObject
-  (not pip-installable). The setup script detects and names the packages, e.g.
-  Fedora/Bazzite: `gstreamer1-plugin-pipewire python3-gobject gstreamer1-plugins-good`
+- **Linux / Wayland:** by default `mss` can't read the screen, so capture goes
+  through xdg-desktop-portal + PipeWire. This needs the distro's GStreamer +
+  PyGObject (not pip-installable). The setup script detects and names the
+  packages, e.g. Fedora/Bazzite:
+  `gstreamer1-plugin-pipewire python3-gobject gstreamer1-plugins-good`
   (on atomic, layer them with `rpm-ostree install …` or use a distrobox).
-  First run shows a one-time screen-share dialog; the choice is remembered.
+  The portal asks you to pick a screen **on every run**.
+
+  **Avoid the per-run prompt:** enable screen reading for X11 apps once — on
+  KDE Plasma: *System Settings → Window Management → Legacy X11 App Support →
+  "Allow legacy applications to read screen contents" → Always*. The tool then
+  detects that `mss` works and uses it directly, with no portal prompt. (This is
+  a global setting that lets X11 apps read the screen — enable it only if you're
+  comfortable with that.)
 
 ## Usage
 

@@ -85,11 +85,39 @@ class ScreenCapture:
         self.close()
 
 
+def _mss_can_capture() -> bool:
+    """True if mss returns a non-black frame (e.g. KDE 'Legacy X11 App Support ->
+    allow reading screen contents' is enabled). Cheap probe of a centre region."""
+    try:
+        import mss
+
+        with mss.mss() as sct:
+            mon = sct.monitors[1]
+            side = 400
+            box = {
+                "left": mon["left"] + max(0, (mon["width"] - side) // 2),
+                "top": mon["top"] + max(0, (mon["height"] - side) // 2),
+                "width": min(side, mon["width"]),
+                "height": min(side, mon["height"]),
+            }
+            frame = np.asarray(sct.grab(box))
+        return frame.size > 0 and int(frame.max()) > 0
+    except Exception:  # noqa: BLE001 - any failure -> mss unusable here
+        return False
+
+
 def default_backend() -> str:
-    """'portal' on Linux/Wayland (mss can't read the screen there), else 'mss'."""
-    if sys.platform.startswith("linux") and os.environ.get("WAYLAND_DISPLAY"):
-        return "portal"
-    return "mss"
+    """Pick a capture backend.
+
+    Windows/macOS/X11 use mss. On Wayland mss normally can't read the screen, so
+    we use the xdg-desktop-portal screencast — but that prompts for a screen on
+    each run. If the user has enabled screen reading for X11 apps (KDE: Legacy
+    X11 App Support) mss works there too and avoids the prompt entirely, so we
+    prefer it when a probe succeeds.
+    """
+    if not (sys.platform.startswith("linux") and os.environ.get("WAYLAND_DISPLAY")):
+        return "mss"
+    return "mss" if _mss_can_capture() else "portal"
 
 
 def open_capture(monitor: int = 1, *, backend: str | None = None):
