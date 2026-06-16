@@ -87,6 +87,14 @@ def test_unleveled_gem_stays_unknown():
     )
 
 
+def test_base_tier_rune_snaps_to_base_not_a_tier_variant():
+    # "Storm Rune" must map to the base entry, not Lesser/Greater/Perfect, even
+    # though those all contain "Storm Rune" (exact match beats the tiered ones).
+    d = ["Storm Rune", "Lesser Storm Rune", "Greater Storm Rune", "Perfect Storm Rune"]
+    assert snap_name("Storm Rune", d) == "Storm Rune"
+    assert parse_row("1x Storm Rune", d) == (1, "Storm Rune")
+
+
 def test_skill_support_gems_stay_unknown():
     # gem names fuzzy-match currencies by accident (e.g. "… Verisium" -> Verisium,
     # "Remnants of Kalguur" -> Orb of Annulment); the Skill:/Support: rule prevents
