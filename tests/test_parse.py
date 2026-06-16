@@ -87,6 +87,27 @@ def test_unleveled_gem_stays_unknown():
     )
 
 
+def test_skill_support_gems_stay_unknown():
+    # gem names fuzzy-match currencies by accident (e.g. "… Verisium" -> Verisium,
+    # "Remnants of Kalguur" -> Orb of Annulment); the Skill:/Support: rule prevents
+    # pricing them and keeps them "?"
+    d = DICT + ["Verisium", "Orb of Annulment"]
+    assert parse_row("Skill: Powered by Verisium", d, keep_unknown=True) == (
+        1,
+        "Skill: Powered by Verisium",
+    )
+    assert parse_row("Skill: Remnants of Kalguur", d, keep_unknown=True) == (
+        1,
+        "Skill: Remnants of Kalguur",
+    )
+    assert parse_row("Support: Scouring Flame", d, keep_unknown=True) == (
+        1,
+        "Support: Scouring Flame",
+    )
+    # full-frame mode drops them entirely
+    assert parse_row("Skill: Grim Pillars", d) is None
+
+
 def test_keep_unknown_rejects_tooltip_modifier_text():
     # hover tooltips OCR as modifier text; quantity-less mod lines must not
     # become options (they carry digits/%/+ or run long)

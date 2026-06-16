@@ -27,6 +27,7 @@ REGAL_FIXTURES = [p for p in FIXTURES if p.name in {"runeshape_01.png", "runesha
 RUNE_FIXTURE = FIXDIR / "runeshape_03.png"
 NOBONUS_FIXTURE = FIXDIR / "runeshape_04.png"
 TOOLTIP_FIXTURE = FIXDIR / "runeshape_06.png"
+GEM_FIXTURE = FIXDIR / "runeshape_05.png"  # 8 skill/support gem options
 
 
 # --- capture helpers (no live display needed) --------------------------------
@@ -168,3 +169,21 @@ def test_hover_tooltip_text_excluded():
     # the panel; its right-misaligned text must not become an option
     assert any("Ward" in n for n in names) and any("Mind" in n for n in names)
     assert not any(w in n for n in names for w in ("Shock", "Chill", "Tempest", "gain"))
+
+
+@pytest.mark.skipif(not GEM_FIXTURE.exists(), reason="gem fixture not present")
+def test_skill_support_gems_not_falsely_priced():
+    pytest.importorskip("rapidocr_onnxruntime")
+    from aldur_appraiser.pipeline import appraise_roi_rows
+
+    det = PanelDetector()
+    img = cv2.imread(str(GEM_FIXTURE))
+    roi = det.reward_image(img, det.find_panel(img))
+    # these are exactly the currencies the gem names used to falsely snap to
+    prices = {"Verisium": 0.0004, "Orb of Annulment": 97.0}
+    rows = appraise_roi_rows(roi, prices)
+
+    gems = [r for r in rows if r.valuation.name.lower().startswith(("skill:", "support:"))]
+    assert len(gems) >= 4
+    assert all(not r.valuation.known for r in gems)         # gems must stay "?"
+    assert not any(r.valuation.name == "Orb of Annulment" for r in rows)  # no 97ex misfire

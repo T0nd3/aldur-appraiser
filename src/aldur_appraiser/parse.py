@@ -47,6 +47,13 @@ def _unleveled_gem(snapped: str, raw_name: str) -> bool:
     return "(level" in snapped.lower() and not any(c.isdigit() for c in raw_name)
 
 
+def _is_gem_reward(name: str) -> bool:
+    """Skill/Support gem rewards ('Skill: …' / 'Support: …'). Their value depends
+    on level/quality, which the panel doesn't show, and the names fuzzy-match
+    currencies by accident (e.g. '… Verisium' -> Verisium) -> never price; '?'."""
+    return name.lower().startswith(("skill:", "support:"))
+
+
 def parse_row(
     raw: str,
     dictionary: Iterable[str],
@@ -90,6 +97,10 @@ def parse_row(
     # so it can't fuzzy-match a currency name by accident.
     if not had_qty and _is_mod_like(raw_name):
         return None
+    # Skill/Support gems: don't price (level not shown) and don't let them
+    # fuzzy-snap to a currency -> keep as unknown ("?").
+    if _is_gem_reward(raw_name):
+        return (qty, raw_name) if (keep_unknown and len(raw_name) >= 3) else None
     name = snap_name(raw_name, dictionary, score_cutoff=score_cutoff)
     if name is not None and not _unleveled_gem(name, raw_name):
         return qty, name
