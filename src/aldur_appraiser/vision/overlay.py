@@ -70,7 +70,7 @@ def build_inline_overlay(base: str, *, icon_paths=None, divine_rate=None):
     format_value(divine_rate). icon_paths maps unit -> icon file.
     """
     from PySide6.QtCore import QRectF, Qt, QTimer, Signal, Slot
-    from PySide6.QtGui import QColor, QFont, QPainter, QPen, QPixmap
+    from PySide6.QtGui import QColor, QFont, QFontMetrics, QPainter, QPen, QPixmap
     from PySide6.QtWidgets import QApplication, QWidget
 
     from aldur_appraiser.pricing.valuation import format_value
@@ -79,6 +79,7 @@ def build_inline_overlay(base: str, *, icon_paths=None, divine_rate=None):
     KNOWN = QColor("#e8e8e8")
     DIM = QColor("#9a9a9a")
     ICON_H = 30
+    WIN_MARGIN = 16  # padding around painted content before the window edge
 
     class InlineOverlay(QWidget):
         _show = Signal(object, object)
@@ -89,8 +90,10 @@ def build_inline_overlay(base: str, *, icon_paths=None, divine_rate=None):
             super().__init__()
             self.base = base
             self.divine_rate = divine_rate
-            # (text, x, y, color, pixmap_or_None)
+            # (text, x, y, color, pixmap_or_None) in monitor-local coords
             self._chips: list[tuple[str, float, float, QColor, object]] = []
+            # window's monitor-local top-left; paint coords are translated by it
+            self._origin = (0.0, 0.0)
             self._spin = None          # (cx, cy) of the spinner while busy, else None
             self._spin_angle = 0
             self._spin_timer = QTimer(self)
@@ -128,17 +131,50 @@ def build_inline_overlay(base: str, *, icon_paths=None, divine_rate=None):
             self._spin_angle = (self._spin_angle + 30) % 360
             self.update()
 
+        def _chip_rect(self, label, x, y, icon):
+            """Monitor-local (x, top, w, h) of a chip, for window sizing."""
+            fm = QFontMetrics(self._font)
+            pad, gap = 9, 5
+            h = max(fm.height(), ICON_H) + 8
+            tw = fm.horizontalAdvance(label)
+            iw = icon.width() if icon is not None else 0
+            w = pad + tw + (gap + iw if icon is not None else 0) + pad
+            return (x, y - h / 2, w, h)
+
+        def _fit_window(self, screen, rects) -> bool:
+            """Size/position the window to a tight bbox around `rects` (empty ->
+            hide). A full-monitor translucent override-redirect surface leaves
+            XWayland/KWin compositor artifacts (incl. on other monitors), so we
+            keep the surface only as large as the painted content."""
+            if not rects:
+                self.hide()
+                return False
+            g = screen.geometry()
+            left = min(r[0] for r in rects) - WIN_MARGIN
+            top = min(r[1] for r in rects) - WIN_MARGIN
+            right = max(r[0] + r[2] for r in rects) + WIN_MARGIN
+            bottom = max(r[1] + r[3] for r in rects) + WIN_MARGIN
+            self._origin = (left, top)
+            self.setGeometry(
+                int(g.left() + left), int(g.top() + top),
+                int(right - left), int(bottom - top),
+            )
+            return True
+
         @Slot(object)
         def _apply_busy(self, anchor) -> None:
             rl, rt, rw, rh, fw, fh = anchor
-            self.setGeometry(self._screen_for_frame(fw, fh).geometry())
+            cx, cy = rl + rw + 26, rt + 22  # near the panel's reward column
+            self._spin = (cx, cy)
             self._chips = []
-            self._spin = (rl + rw + 26, rt + 22)  # near the panel's reward column
+            r, pad = 14, 6
+            rect = (cx - r - pad, cy - r - pad, 2 * (r + pad), 2 * (r + pad))
             if not self._spin_timer.isActive():
                 self._spin_timer.start()
-            self.update()
-            self.show()
-            self.raise_()
+            if self._fit_window(self._screen_for_frame(fw, fh), [rect]):
+                self.update()
+                self.show()
+                self.raise_()
 
         def _screen_for_frame(self, fw: int, fh: int):
             for s in QApplication.screens():
@@ -150,7 +186,6 @@ def build_inline_overlay(base: str, *, icon_paths=None, divine_rate=None):
         @Slot(object, object)
         def _apply_show(self, rows, anchor) -> None:
             rl, rt, rw, rh, fw, fh = anchor
-            self.setGeometry(self._screen_for_frame(fw, fh).geometry())
             self._spin_timer.stop()
             self._spin = None
             chips = []
@@ -171,9 +206,11 @@ def build_inline_overlay(base: str, *, icon_paths=None, divine_rate=None):
                     label, color, icon = "?", DIM, None
                 chips.append((label, float(x), float(y), color, icon))
             self._chips = chips
-            self.update()
-            self.show()
-            self.raise_()
+            rects = [self._chip_rect(lbl, x, y, icon) for lbl, x, y, _c, icon in chips]
+            if self._fit_window(self._screen_for_frame(fw, fh), rects):
+                self.update()
+                self.show()
+                self.raise_()
 
         @Slot()
         def _apply_hide(self) -> None:
@@ -198,6 +235,8 @@ def build_inline_overlay(base: str, *, icon_paths=None, divine_rate=None):
                 return
             p = QPainter(self)
             p.setRenderHint(QPainter.Antialiasing)
+            # chips/spinner carry monitor-local coords; shift into window space
+            p.translate(-self._origin[0], -self._origin[1])
             if self._spin is not None:
                 self._paint_spinner(p)
                 p.end()

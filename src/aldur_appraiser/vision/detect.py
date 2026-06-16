@@ -30,10 +30,12 @@ DEFAULT_THRESHOLD = 0.8
 # Reward ROI as multiples of the matched header box (left=hx, top=hy).
 ROI_TOP_FROM_HEADER_H = 1.0   # start one header-height below the header top
 ROI_WIDTH_FROM_HEADER_W = 1.95
-# Tall enough for up to ~4 options + the bonus reward row (Artificer's Orb in
-# fixture 03 sits ~6.5 header-heights below the header top). x stays inside the
-# book, so extra height only catches empty parchment, never the quest tracker.
-ROI_HEIGHT_FROM_HEADER_H = 7.0
+# Tall enough for a long reward list + the bonus reward row. Fixture 08 has 11
+# options whose last row sits ~9.9 header-heights below the header top, so 12
+# leaves margin for that plus a bonus divider. x stays inside the book, so extra
+# height past a shorter panel catches empty parchment/background — harmless, as
+# the right-alignment + "Nx"/currency-snap filters drop any non-reward text.
+ROI_HEIGHT_FROM_HEADER_H = 12.0
 
 
 @dataclass(frozen=True)

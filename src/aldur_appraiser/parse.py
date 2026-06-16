@@ -54,6 +54,14 @@ def _is_gem_reward(name: str) -> bool:
     return name.lower().startswith(("skill:", "support:"))
 
 
+def _is_unique_reward(name: str) -> bool:
+    """Unique-item rewards render as 'Unique <ItemClass>' (e.g. 'Unique Shield',
+    'Unique Sceptre') because the specific unique is only rolled when picked. The
+    item class isn't a currency and its value is unknowable here, so never price
+    it -> keep as unknown ('?')."""
+    return name.lower().startswith("unique ")
+
+
 def parse_row(
     raw: str,
     dictionary: Iterable[str],
@@ -97,9 +105,9 @@ def parse_row(
     # so it can't fuzzy-match a currency name by accident.
     if not had_qty and _is_mod_like(raw_name):
         return None
-    # Skill/Support gems: don't price (level not shown) and don't let them
-    # fuzzy-snap to a currency -> keep as unknown ("?").
-    if _is_gem_reward(raw_name):
+    # Skill/Support gems and unique items: don't price (value not knowable from
+    # the panel) and don't let them fuzzy-snap to a currency -> keep as "?".
+    if _is_gem_reward(raw_name) or _is_unique_reward(raw_name):
         return (qty, raw_name) if (keep_unknown and len(raw_name) >= 3) else None
     name = snap_name(raw_name, dictionary, score_cutoff=score_cutoff)
     if name is not None and not _unleveled_gem(name, raw_name):

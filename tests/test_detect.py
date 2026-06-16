@@ -28,6 +28,7 @@ RUNE_FIXTURE = FIXDIR / "runeshape_03.png"
 NOBONUS_FIXTURE = FIXDIR / "runeshape_04.png"
 TOOLTIP_FIXTURE = FIXDIR / "runeshape_06.png"
 GEM_FIXTURE = FIXDIR / "runeshape_05.png"  # 8 skill/support gem options
+UNIQUE_FIXTURE = FIXDIR / "runeshape_08.png"  # 4 "Unique <Class>" + 4 runes
 
 
 # --- capture helpers (no live display needed) --------------------------------
@@ -187,3 +188,24 @@ def test_skill_support_gems_not_falsely_priced():
     assert len(gems) >= 4
     assert all(not r.valuation.known for r in gems)         # gems must stay "?"
     assert not any(r.valuation.name == "Orb of Annulment" for r in rows)  # no 97ex misfire
+
+
+@pytest.mark.skipif(not UNIQUE_FIXTURE.exists(), reason="unique fixture not present")
+def test_unique_items_not_falsely_priced():
+    pytest.importorskip("rapidocr_onnxruntime")
+    from aldur_appraiser.pipeline import appraise_roi_rows
+
+    det = PanelDetector()
+    img = cv2.imread(str(UNIQUE_FIXTURE))
+    roi = det.reward_image(img, det.find_panel(img))
+    prices = {"Exalted Orb": 1.0, "Divine Orb": 200.0, "Greater Inspiration Rune": 0.5}
+    rows = appraise_roi_rows(roi, prices)
+
+    uniques = [r for r in rows if r.valuation.name.lower().startswith("unique ")]
+    assert len(uniques) >= 4
+    assert all(not r.valuation.known for r in uniques)      # uniques must stay "?"
+    # the priceable runes in the same panel are still valued
+    assert any(r.valuation.known for r in rows)
+    # the ROI must be tall enough to capture the whole 11-option list, not just
+    # the first ~8 rows (regression guard for ROI_HEIGHT_FROM_HEADER_H)
+    assert len(rows) == 11

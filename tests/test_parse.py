@@ -116,6 +116,17 @@ def test_skill_support_gems_stay_unknown():
     assert parse_row("Skill: Grim Pillars", d) is None
 
 
+def test_unique_items_stay_unknown():
+    # unique rewards render as "Unique <ItemClass>" (the specific unique is only
+    # rolled on pick); the class isn't a currency and must never be priced -> "?"
+    d = DICT + ["Exalted Orb"]
+    assert parse_row("Unique Shield", d, keep_unknown=True) == (1, "Unique Shield")
+    assert parse_row("Unique Sceptre", d, keep_unknown=True) == (1, "Unique Sceptre")
+    assert parse_row("1x Unique Focus", d, keep_unknown=True) == (1, "Unique Focus")
+    # full-frame mode drops them entirely
+    assert parse_row("Unique Quiver", d) is None
+
+
 def test_keep_unknown_rejects_tooltip_modifier_text():
     # hover tooltips OCR as modifier text; quantity-less mod lines must not
     # become options (they carry digits/%/+ or run long)
