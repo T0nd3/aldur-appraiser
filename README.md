@@ -86,14 +86,11 @@ pip install -e ".[tesseract]"       # optional OCR fallback (needs the tesseract
   packages, e.g. Fedora/Bazzite:
   `gstreamer1-plugin-pipewire python3-gobject gstreamer1-plugins-good`
   (on atomic, layer them with `rpm-ostree install …` or use a distrobox).
-  The portal asks you to pick a screen **on every run**.
-
-  **Avoid the per-run prompt:** enable screen reading for X11 apps once — on
-  KDE Plasma: *System Settings → Window Management → Legacy X11 App Support →
-  "Allow legacy applications to read screen contents" → Always*. The tool then
-  detects that `mss` works and uses it directly, with no portal prompt. (This is
-  a global setting that lets X11 apps read the screen — enable it only if you're
-  comfortable with that.)
+  On KDE the portal asks you to pick a screen **on every run**: its screencast
+  *restore token* (which would remember the choice) currently doesn't deliver
+  frames — a known xdg-desktop-portal-kde issue. On setups where X11 apps *can*
+  read the screen, the tool auto-detects that `mss` works and uses it directly,
+  skipping the prompt.
 
 ## Usage
 
