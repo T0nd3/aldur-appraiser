@@ -187,6 +187,14 @@ def run_overlay(*, backend: str | None = None, style: str = "corner", refresh: b
     import signal
     import threading
 
+    # opencv-python (a transitive dep, imported when detect/ocr load cv2) hijacks
+    # QT_QPA_PLATFORM_PLUGIN_PATH to its own bundled Qt plugins, which shadow the
+    # real Qt plugins and break the xcb platform plugin (notably inside the
+    # Flatpak, where Qt's plugins live in the runtime). Drop that override so Qt
+    # uses its normal search path.
+    if "cv2" in os.environ.get("QT_QPA_PLATFORM_PLUGIN_PATH", ""):
+        os.environ.pop("QT_QPA_PLATFORM_PLUGIN_PATH", None)
+
     # On Wayland, always-on-top + click-through are honored more reliably under
     # XWayland (xcb) than the native wayland Qt platform; let users override.
     if sys.platform.startswith("linux") and os.environ.get("WAYLAND_DISPLAY"):
