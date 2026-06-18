@@ -1,9 +1,11 @@
 name: build-binaries
 
-# Builds standalone binaries (no Python needed by end users):
+# Builds standalone, end-user artifacts (no Python needed):
 #   - Windows .exe
 #   - macOS binary (Apple Silicon; capture via mss, no portal needed)
-# Manual runs for iteration; v* tags attach the binaries to a GitHub Release.
+#   - Linux .flatpak bundle (x86_64; KDE runtime + PySide BaseApp)
+# Manual runs (workflow_dispatch) build + upload artifacts for iteration.
+# v* tags additionally attach everything to a single GitHub Release.
 on:
   workflow_dispatch:
   push:
@@ -17,6 +19,7 @@ defaults:
     shell: bash   # available on the Windows runner too; unifies all steps
 
 jobs:
+  # --- PyInstaller binaries (Windows + macOS) --------------------------------
   build:
     strategy:
       fail-fast: false
@@ -52,10 +55,62 @@ jobs:
           name: ${{ matrix.artifact }}
           path: dist/${{ matrix.binary }}
 
-      - name: Attach to release
-        if: startsWith(github.ref, 'refs/tags/')
+  # --- Linux Flatpak bundle ---------------------------------------------------
+  flatpak:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install flatpak tooling + Flathub remote (user)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y flatpak flatpak-builder
+          flatpak remote-add --user --if-not-exists flathub \
+            https://flathub.org/repo/flathub.flatpakrepo
+
+      - name: Install runtime + SDK + PySide BaseApp (6.9)
+        run: |
+          flatpak install --user -y --noninteractive flathub \
+            org.kde.Platform//6.9 org.kde.Sdk//6.9 io.qt.PySide.BaseApp//6.9
+
+      - name: Build the app wheel (installed offline inside the sandbox)
+        run: |
+          python -m pip install --upgrade pip
+          pip wheel . --no-deps -w dist
+
+      - name: Build the .flatpak bundle
+        working-directory: packaging/flatpak
+        run: |
+          ver=$(grep -E '^version' ../../pyproject.toml | head -1 | sed -E 's/.*"([^"]+)".*/\1/')
+          flatpak-builder --user --force-clean --repo=_repo _build \
+            io.github.t0nd3.AldurAppraiser.yaml
+          flatpak build-bundle \
+            --runtime-repo=https://dl.flathub.org/repo/flathub.flatpakrepo \
+            _repo "aldur-appraiser-${ver}-x86_64.flatpak" \
+            io.github.t0nd3.AldurAppraiser master
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: aldur-appraiser-flatpak
+          path: packaging/flatpak/*.flatpak
+
+  # --- Single release step (tags only): attach all artifacts, notes once ------
+  release:
+    needs: [build, flatpak]
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Attach artifacts to the release
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/${{ matrix.binary }}
-          generate_release_notes: true
+          files: artifacts/**/*
+          generate_release_notes: true   # runs ONCE now -> no duplicate changelog
           fail_on_unmatched_files: true
