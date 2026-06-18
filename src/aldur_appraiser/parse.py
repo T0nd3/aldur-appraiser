@@ -13,7 +13,7 @@ from __future__ import annotations
 import re
 from collections.abc import Iterable
 
-from rapidfuzz import process
+from rapidfuzz import fuzz, process
 
 # "1x Orb of Augmentation", "20 x Chaos Orb", "3X Divine Orb".
 # The quantity token allows letters the OCR confuses with digits on the italic
@@ -123,11 +123,21 @@ def snap_name(
     *,
     score_cutoff: int = DEFAULT_CUTOFF,
 ) -> str | None:
-    """Fuzzy-snap a noisy name to the closest known currency name."""
+    """Fuzzy-snap a noisy name to the closest known currency name.
+
+    Uses plain Levenshtein ratio (not WRatio): WRatio over-rewards the shared
+    'Rune'/'Orb' token, so an untracked or mis-OCR'd name like 'Glacier Rune'
+    would match an unrelated 'Perfect Rebirth Rune' at ~86 and get a bogus price.
+    Ratio keeps character-level OCR-slip correction ('Augrnentation' ->
+    'Augmentation' = 92) while dropping those token-overlap false positives to
+    ~50, so they fall below the cutoff and stay '?' instead of being mispriced.
+    """
     cleaned = raw_name.strip().strip(".,:;")
     if not cleaned:
         return None
-    result = process.extractOne(cleaned, list(dictionary), score_cutoff=score_cutoff)
+    result = process.extractOne(
+        cleaned, list(dictionary), scorer=fuzz.ratio, score_cutoff=score_cutoff
+    )
     return result[0] if result else None
 
 

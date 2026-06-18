@@ -87,6 +87,18 @@ def test_unleveled_gem_stays_unknown():
     )
 
 
+def test_untracked_name_does_not_snap_to_unrelated_rune():
+    # an untracked / mis-OCR'd name must NOT fuzzy-match an unrelated currency
+    # that merely shares the "Rune" token (WRatio scored these ~86, above the
+    # cutoff, and showed a bogus price; ratio scores them ~50 -> rejected).
+    d = ["Perfect Rebirth Rune", "Ancient Rune of Animosity", "Glacial Rune"]
+    assert snap_name("Glacier Rune", d[:2]) is None          # no Glacial -> "?"
+    # but a real OCR slip of the tracked name still snaps to it
+    assert snap_name("Glacier Rune", d) == "Glacial Rune"
+    # inside the ROI such a line is kept as unknown rather than mispriced
+    assert parse_row("1x Glacier Rune", d[:2], keep_unknown=True) == (1, "Glacier Rune")
+
+
 def test_base_tier_rune_snaps_to_base_not_a_tier_variant():
     # "Storm Rune" must map to the base entry, not Lesser/Greater/Perfect, even
     # though those all contain "Storm Rune" (exact match beats the tiered ones).
