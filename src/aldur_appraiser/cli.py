@@ -13,8 +13,6 @@ from __future__ import annotations
 import argparse
 import sys
 
-from rapidfuzz import process
-
 from aldur_appraiser.config import load_config
 from aldur_appraiser.pricing.cache import get_or_fetch
 from aldur_appraiser.pricing.client import PricingError
@@ -35,8 +33,11 @@ def _load_prices(args: argparse.Namespace):
 
 
 def _snap(name: str, names, *, cutoff: int = 80) -> str | None:
-    match = process.extractOne(name, names, score_cutoff=cutoff)
-    return match[0] if match else None
+    # Delegate to the pipeline's snapper so `price --fuzzy` matches exactly what
+    # the overlay does (fuzz.ratio, not WRatio -> no bogus token-overlap matches).
+    from aldur_appraiser.parse import snap_name
+
+    return snap_name(name, names, score_cutoff=cutoff)
 
 
 def cmd_price(args: argparse.Namespace) -> int:
