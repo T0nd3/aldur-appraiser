@@ -32,3 +32,5 @@ assets/fixtures/*.png
 packaging/flatpak/_build/
 packaging/flatpak/.flatpak-builder/
 packaging/flatpak/flatpak-pip-generator
+packaging/flatpak/_repo/
+packaging/flatpak/*.flatpak

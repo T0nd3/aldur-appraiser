@@ -55,6 +55,22 @@ clipboard, input injection, or memory access; see the source).
 
 If you'd rather build it yourself instead, see *From source* below.
 
+### Flatpak (Linux, x86_64)
+
+Download `aldur-appraiser-<version>-x86_64.flatpak` from the
+[Releases](../../releases) page and install it:
+
+```bash
+flatpak install aldur-appraiser-*-x86_64.flatpak
+flatpak run io.github.t0nd3.AldurAppraiser
+```
+
+It pulls the KDE runtime + PySide BaseApp from Flathub automatically (add the
+[Flathub remote](https://flatpak.org/setup/) first if you haven't). Screen
+capture goes through the desktop's ScreenCast portal — the sandbox-native way —
+so it works on Wayland out of the box (approve the one-time share dialog). To
+build the bundle yourself, see `packaging/flatpak/` (`./bundle.sh`).
+
 ### From source (recommended on Linux)
 
 The cross-platform setup script creates a venv, installs everything, and checks
