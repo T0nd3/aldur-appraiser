@@ -278,6 +278,17 @@ def run_overlay(*, backend: str | None = None, style: str = "corner", refresh: b
         tray.messageClicked.connect(
             lambda: QDesktopServices.openUrl(QUrl(updates.RELEASES_PAGE))
         )
+    else:
+        # No system tray: fall back to the console so the update hint (and
+        # backend errors) aren't silently dropped.
+        bridge.update.connect(
+            lambda latest: print(
+                f"Update {latest} available — download: {updates.RELEASES_PAGE}",
+                file=sys.stderr,
+            )
+        )
+        bridge.uptodate.connect(lambda v: print(f"v{v} is up to date."))
+        bridge.error.connect(lambda m: print(f"error: {m}", file=sys.stderr))
 
     def worker() -> None:
         try:
