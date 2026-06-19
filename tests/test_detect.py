@@ -29,6 +29,9 @@ NOBONUS_FIXTURE = FIXDIR / "runeshape_04.png"
 TOOLTIP_FIXTURE = FIXDIR / "runeshape_06.png"
 GEM_FIXTURE = FIXDIR / "runeshape_05.png"  # 8 skill/support gem options
 UNIQUE_FIXTURE = FIXDIR / "runeshape_08.png"  # 4 "Unique <Class>" + 4 runes
+SCROLLED_FIXTURES = [  # same panel, list scrolled to different offsets
+    p for p in (FIXDIR / "runeshape_09.png", FIXDIR / "runeshape_10.png") if p.exists()
+]
 
 
 # --- capture helpers (no live display needed) --------------------------------
@@ -188,6 +191,21 @@ def test_skill_support_gems_not_falsely_priced():
     assert len(gems) >= 4
     assert all(not r.valuation.known for r in gems)         # gems must stay "?"
     assert not any(r.valuation.name == "Orb of Annulment" for r in rows)  # no 97ex misfire
+
+
+@pytest.mark.skipif(len(SCROLLED_FIXTURES) < 2, reason="scrolled fixtures not present")
+@pytest.mark.parametrize("path", SCROLLED_FIXTURES, ids=lambda p: p.name)
+def test_detects_panel_regardless_of_list_scroll(path):
+    # A long reward list can be scrolled. The header template's lower strip
+    # overlaps the first row / scrollbar, which changes with scroll and used to
+    # drop the match below threshold (scrolled panel went undetected). Matching
+    # only the stable title band must detect the panel at any scroll offset.
+    det = PanelDetector()
+    img = cv2.imread(str(path))
+    panel = det.find_panel(img)
+    assert panel is not None
+    assert panel.confidence > 0.8
+    assert det.reward_image(img, panel).size > 0
 
 
 @pytest.mark.skipif(not UNIQUE_FIXTURE.exists(), reason="unique fixture not present")

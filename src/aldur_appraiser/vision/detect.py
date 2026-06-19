@@ -37,6 +37,11 @@ ROI_WIDTH_FROM_HEADER_W = 1.95
 # the right-alignment + "Nx"/currency-snap filters drop any non-reward text.
 ROI_HEIGHT_FROM_HEADER_H = 12.0
 
+# Fraction of the header template (from the top) used for matching. The lower
+# strip holds the first reward row / scrollbar, which changes as the list is
+# scrolled; matching only the stable title band keeps detection scroll-invariant.
+MATCH_HEIGHT_FRAC = 0.6
+
 
 @dataclass(frozen=True)
 class PanelBox:
@@ -77,6 +82,12 @@ class PanelDetector:
         if tpl is None:
             raise FileNotFoundError(f"detection template not found: {path}")
         self._tpl = tpl
+        # Match only the stable upper band (the title text). The template's lower
+        # strip overlaps the first reward row / scrollbar, which changes when the
+        # panel's list is scrolled — that tanked the match (0.89 -> 0.74, below
+        # threshold, so a scrolled panel went undetected). We still report the
+        # full-template box (below) so the reward-ROI geometry stays calibrated.
+        self._match_tpl = tpl[: max(1, int(tpl.shape[0] * MATCH_HEIGHT_FRAC)), :]
         self.threshold = threshold
         # The template is calibrated at one resolution; multi-scale matching
         # makes detection resolution-/UI-scale-independent. 0.4-1.7 spans roughly
@@ -95,13 +106,14 @@ class PanelDetector:
     def _best_match(self, small: np.ndarray, scales) -> PanelBox | None:
         """Best header match over the given scales (no threshold applied)."""
         d = self.detect_downscale
-        th, tw = self._tpl.shape[:2]
+        th, tw = self._tpl.shape[:2]          # full template -> reported PanelBox size
+        mh, mw = self._match_tpl.shape[:2]     # stable upper crop -> used for matching
         best: PanelBox | None = None
         for scale in scales:
-            sw, sh = int(tw * scale * d), int(th * scale * d)
+            sw, sh = int(mw * scale * d), int(mh * scale * d)
             if sw < 8 or sh < 8 or sw > small.shape[1] or sh > small.shape[0]:
                 continue
-            tpl = cv2.resize(self._tpl, (sw, sh), interpolation=cv2.INTER_AREA)
+            tpl = cv2.resize(self._match_tpl, (sw, sh), interpolation=cv2.INTER_AREA)
             res = cv2.matchTemplate(small, tpl, cv2.TM_CCOEFF_NORMED)
             _, max_val, _, max_loc = cv2.minMaxLoc(res)
             if not np.isfinite(max_val):  # uniform region -> NaN

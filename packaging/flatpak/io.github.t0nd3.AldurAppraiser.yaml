@@ -42,7 +42,7 @@ modules:
     buildsystem: simple
     build-commands:
       # Install the pre-built, universal (py3-none-any) wheel; deps already in /app.
-      - pip3 install --no-index --no-deps --prefix=${FLATPAK_DEST} aldur_appraiser-0.2.3-py3-none-any.whl
+      - pip3 install --no-index --no-deps --prefix=${FLATPAK_DEST} aldur_appraiser-0.2.4-py3-none-any.whl
       # opencv-python (pulled in by rapidocr) bundles its own Qt plugins that
       # shadow PySide6's and break the xcb platform plugin. We never use cv2's
       # GUI, so drop them and let PySide6's plugins load.
@@ -59,7 +59,7 @@ modules:
       - install -Dm644 io.github.t0nd3.AldurAppraiser.metainfo.xml ${FLATPAK_DEST}/share/metainfo/io.github.t0nd3.AldurAppraiser.metainfo.xml
     sources:
       - type: file
-        path: ../../dist/aldur_appraiser-0.2.3-py3-none-any.whl
+        path: ../../dist/aldur_appraiser-0.2.4-py3-none-any.whl
       - type: file
         path: aldur-appraiser
       - type: file

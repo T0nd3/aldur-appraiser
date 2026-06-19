@@ -38,6 +38,11 @@
   <content_rating type="oars-1.1"/>
 
   <releases>
+    <release version="0.2.4" date="2026-06-19">
+      <description>
+        <p>Fixes detection of long reward lists: scrolling the panel no longer makes the overlay lose the panel and stop showing values.</p>
+      </description>
+    </release>
     <release version="0.2.3" date="2026-06-16">
       <description>
         <p>More accurate pricing: an untracked or mis-read reward name no longer matches an unrelated currency that merely shares a word like "Rune" or "Orb" — it now stays unknown instead of showing a wrong price. Adds the Linux Flatpak build.</p>
