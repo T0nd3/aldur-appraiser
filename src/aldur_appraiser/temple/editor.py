@@ -358,6 +358,8 @@ def build_editor():
             remove_card.clicked.connect(self._remove_card)
             clear_hand = QPushButton("Clear hand")
             clear_hand.clicked.connect(self._clear_hand)
+            detect_hand_btn = QPushButton("Detect hand from screen")
+            detect_hand_btn.clicked.connect(self._detect_hand)
             suggest_btn = QPushButton("Suggest placement")
             suggest_btn.clicked.connect(self._suggest)
             self.suggestions = QLabel("Add your drawn cards, then Suggest.")
@@ -393,6 +395,7 @@ def build_editor():
             left.addWidget(add_card)
             left.addWidget(remove_card)
             left.addWidget(clear_hand)
+            left.addWidget(detect_hand_btn)
             left.addWidget(QLabel("Medallion rooms (held across runs)"))
             left.addWidget(self.medallion_list, 1)
             left.addWidget(add_med)
@@ -439,6 +442,28 @@ def build_editor():
             self.hand_list.clear()
             self.grid.set_highlights(())
             self.suggestions.setText("Add your drawn cards, then Suggest.")
+
+        def _detect_hand(self) -> None:
+            """Read the drawn cards off the live game screen (capture + OCR)."""
+            try:
+                from aldur_appraiser.temple.vision import detect_hand
+                from aldur_appraiser.vision.capture import open_capture
+
+                with open_capture() as cap:
+                    frame = cap.grab()
+                detected = detect_hand(frame)
+            except Exception as e:  # noqa: BLE001 - a UI button must never crash
+                self.suggestions.setText(f"Detection failed: {e}")
+                return
+            if not detected:
+                self.suggestions.setText("No 'Room Cards' panel found on screen.")
+                return
+            self.hand = list(detected)
+            self.hand_list.clear()
+            for rid in self.hand:
+                self.hand_list.addItem(ROOMS[rid].name)
+            names = ", ".join(ROOMS[r].name for r in self.hand)
+            self.suggestions.setText(f"Detected {len(self.hand)} cards: {names}")
 
         def _add_medallion(self) -> None:
             if self.brush in ROOMS:
