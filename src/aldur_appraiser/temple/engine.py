@@ -90,8 +90,8 @@ class Temple:
     def accessible_cells(self, *, ignore: Cell | None = None) -> set[Cell]:
         """Occupied cells reachable from the entrance over 4-adjacent occupied
         cells. `ignore` removes a cell first (used to test what a removal would
-        orphan). Drives the Generator's road-connection rule and the chokepoint
-        (articulation) check."""
+        orphan). Drives the Generator's road-connection rule and the
+        articulation / removable-room checks."""
         occupied = {c for c in self.cells if c != ignore}
         if not occupied:
             return set()
@@ -112,23 +112,26 @@ class Temple:
         acc = self.accessible_cells()
         return {c for c in acc if self.is_room(c)}
 
-    def chokepoint_room_cells(self) -> set[Cell]:
-        """Chokepoint rooms = accessible rooms that are the SOLE connection to some
-        room behind them (articulation points): if one is destabilised by the
-        random 2-3 per entry, everything behind it is stranded. A valuable room is
-        safer as a non-chokepoint — build a redundant path (a loop) around it.
-
-        NB: this is a layout-risk heuristic, NOT the game's "Restricted Rooms"
-        (those are the Architect reward Vaults — see is_volatile())."""
+    def articulation_room_cells(self) -> set[Cell]:
+        """Accessible rooms whose removal would orphan another room (articulation
+        points). The game never strands rooms, so these are SAFE from
+        destabilisation — only `removable_room_cells` (the loose ends) can go."""
         base = self.accessible_room_cells()
         if not base:
             return set()
-        chokepoints: set[Cell] = set()
+        arts: set[Cell] = set()
         for c in self.room_cells():
             after = {rc for rc in self.accessible_cells(ignore=c) if self.is_room(rc)}
-            if (base - {c}) - after:  # some other room lost access -> c is a chokepoint
-                chokepoints.add(c)
-        return chokepoints
+            if (base - {c}) - after:  # some other room lost access -> c is an articulation
+                arts.add(c)
+        return arts
+
+    def removable_room_cells(self) -> set[Cell]:
+        """Rooms destabilisation can delete: accessible rooms whose removal orphans
+        nothing (the "loose ends"). A snake from the entrance has exactly one — its
+        tail; every branch or loop adds another. Keep valuable rooms OFF this set
+        (bury them in the chain) and leave a cheap room as the end."""
+        return self.accessible_room_cells() - self.articulation_room_cells()
 
     # --- conversions ---------------------------------------------------------
 

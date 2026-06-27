@@ -11,7 +11,7 @@ def _temple(entrance=(0, 0)):
 
 
 def test_score_rewards_higher_tiers():
-    t = _temple()
+    t = _temple(entrance=(4, 4))           # commander sits on the entrance -> connected
     t.place((4, 4), "commander")
     t.place((5, 4), "garrison")
     low = score(t)
@@ -60,9 +60,9 @@ def test_path_that_connects_a_generator_scores_positive():
 def test_volatile_room_is_discounted_in_score():
     # a persistent room outscores a one-use (volatile) room of the same tier
     persistent = _temple()
-    persistent.place((4, 4), "garrison")          # tier 1, persists
+    persistent.place((0, 0), "garrison")          # on the entrance -> connected
     volatile = _temple()
-    volatile.place((4, 4), "treasure_vault")      # tier 1, self-destabilises
+    volatile.place((0, 0), "treasure_vault")      # tier 1, self-destabilises
     assert score(persistent) > score(volatile)
 
 

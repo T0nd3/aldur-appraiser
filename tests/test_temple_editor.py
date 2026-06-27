@@ -40,16 +40,16 @@ def test_editor_advisor_highlights_best_cell():
     _app = QApplication.instance() or QApplication([])
     w = build_editor()
     t = w.temple
-    t.place((4, 5), "commander")
-    t.place((5, 5), "garrison")
-    t.place((3, 5), "garrison")   # Commander at T2; (4, 4) takes it to T3
+    t.place((4, 7), "commander")   # adjacent to the entrance (4,8) -> connected
+    t.place((5, 7), "garrison")
+    t.place((3, 7), "garrison")   # Commander at T2; (4, 6) takes it to T3
     w._refresh()
 
     w.brush = "garrison"
     w._add_card()
     assert w.hand == ["garrison"]
     w._suggest()
-    assert w.grid._highlights == {(4, 4)}
+    assert w.grid._highlights == {(4, 6)}
 
 
 def test_editor_preset_feeds_the_advisor():

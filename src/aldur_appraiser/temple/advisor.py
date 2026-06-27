@@ -20,10 +20,10 @@ from aldur_appraiser.temple.engine import Cell, Temple
 from aldur_appraiser.temple.rooms import ROOMS, is_volatile
 
 VIOLATION_PENALTY = 5.0
-# A chokepoint (articulation) room is the sole link to rooms behind it, so a
-# random destabilisation there strands them — discount its value to nudge the
-# advisor toward redundant paths (loops) that protect valuable rooms.
-CHOKEPOINT_DISCOUNT = 0.6
+# A "removable" room is a loose end (its removal orphans nothing), so it's what
+# destabilisation can delete. Discount it to push valuable rooms into the chain's
+# interior (safe) and keep the snake's end cheap — fewer ends = less loss.
+REMOVABLE_DISCOUNT = 0.6
 # A volatile room (Treasure Vault / Architect reward rooms) self-destabilises once
 # used, so it won't persist in a re-runnable temple — discounted the same way.
 VOLATILE_DISCOUNT = 0.6
@@ -42,13 +42,14 @@ class Suggestion:
 def score(temple: Temple, values: dict[str, float] | None = None) -> float:
     """A single number for the whole temple: sum of value*tier, less violations."""
     values = values or {}
-    chokepoints = temple.chokepoint_room_cells()
+    removable = temple.removable_room_cells()
+    tiers = temple.tiers()
     total = 0.0
-    for c, tier in temple.tiers().items():
+    for c in temple.accessible_room_cells():  # only connected rooms give bonuses
         rid = temple.effective_room_id(c)
-        worth = values.get(rid, 1.0) * tier
-        if c in chokepoints:          # sole link -> a random destab strands rooms
-            worth *= 1.0 - CHOKEPOINT_DISCOUNT
+        worth = values.get(rid, 1.0) * tiers.get(c, 1)
+        if c in removable:            # a loose end -> destabilisation can delete it
+            worth *= 1.0 - REMOVABLE_DISCOUNT
         if is_volatile(ROOMS[rid]):   # self-destabilises once used
             worth *= 1.0 - VOLATILE_DISCOUNT
         total += worth

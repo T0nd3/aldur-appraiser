@@ -100,22 +100,19 @@ def test_accessibility_from_entrance():
     assert (5, 5) not in acc
 
 
-# --- chokepoint (articulation) rooms -----------------------------------------
+# --- removable (loose-end) rooms / snake logic -------------------------------
 
 
-def test_chokepoint_room_detected_and_loop_clears_it():
-    t = _temple(entrance=(0, 0))
-    t.place((0, 0), "garrison")     # entrance
-    t.place((0, 1), "armoury")      # sole connector -> chokepoint
-    t.place((0, 2), "commander")    # behind it (a leaf)
-    r = t.chokepoint_room_cells()
-    assert (0, 1) in r
-    assert (0, 2) not in r          # leaf is safe
-    # add a redundant path loop around the armoury -> it's no longer the sole link
-    t.place((1, 0), "path")
-    t.place((1, 1), "path")
-    t.place((1, 2), "path")
-    assert (0, 1) not in t.chokepoint_room_cells()
+def test_removable_rooms_are_the_loose_ends_of_the_chain():
+    t = _temple(entrance=(4, 8))
+    t.place((4, 7), "garrison")     # first room (anchored to the entrance) -> safe
+    t.place((4, 6), "armoury")      # interior of the snake -> safe (articulation)
+    t.place((4, 5), "commander")    # the tail -> the only deletable room
+    assert t.removable_room_cells() == {(4, 5)}
+    assert (4, 6) in t.articulation_room_cells()
+    # branching off the middle adds a second loose end (worse for keeping rooms)
+    t.place((5, 6), "smithy")
+    assert t.removable_room_cells() == {(4, 5), (5, 6)}
 
 
 # --- manual tier override (sacrifice / assassinate rooms) --------------------

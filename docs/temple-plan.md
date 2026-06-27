@@ -30,15 +30,18 @@ minimising rooms lost to destabilisation.
   via Xipocado's Console after the Architect). They — and the Treasure Vault —
   are **volatile**: self-destabilise once used (`is_volatile()`; editor marks them
   magenta / "One-use"). One-time reward, won't persist.
-- Separately, the engine flags **chokepoints** (`chokepoint_room_cells`):
-  articulation points that are the sole link to rooms behind them, so a random
-  2–3 destabilisation there strands those rooms. A **redundant path / loop**
-  clears a chokepoint. Editor marks them orange. (A layout heuristic, NOT the
-  game's "Restricted Rooms".)
-- Both chokepoints and volatile rooms are **discounted** in the advisor score.
+- **Snake building (key):** destabilisation only deletes rooms whose removal
+  orphans nothing — the **loose ends** (`removable_room_cells`). A single chain
+  ("snake") from the entrance has exactly ONE end (its tail), so only that one
+  can be lost; branches and loops add more ends. So the goal is the OPPOSITE of
+  loops: build a snake, bury valuable rooms in the interior (articulation points
+  are SAFE), and leave a cheap room as the tail. The editor marks the loose ends
+  orange ("deletable"); the advisor discounts them.
+- Only **accessible** (connected) rooms count toward the score / bonuses.
+- Volatile rooms are also discounted.
 - **Objective:** maximise high-tier valuable rooms (the upgrade graph), keep them
-  off chokepoints (loops), prefer persistent over volatile, and avoid fighting
-  the Architect/Atziri (greater destabilisation) + the random 2–3 tiles.
+  off the loose ends (snake interior), prefer persistent over volatile, and avoid
+  fighting the Architect/Atziri (greater destabilisation).
 
 ## Data model — BUILT (`src/aldur_appraiser/temple/rooms.py`)
 - `Room` dataclass: `id, name, category, bonus, generator, fixed_tier,
@@ -71,8 +74,8 @@ minimising rooms lost to destabilisation.
 4. **Exact per-tier % numbers** (value display only; not needed for structure).
 5. **"Restricted Rooms" — RESOLVED:** the in-game Architect's Chamber confirms the
    game's "Restricted Rooms" are the Architect reward Vaults (= our `volatile`/
-   `architect_room`). The articulation concept was renamed **chokepoint**
-   (`chokepoint_room_cells`) and kept as a layout heuristic, separate from them.
+   `architect_room`). A separate `removable_room_cells` heuristic models the snake
+   logic (loose ends destabilisation can delete) — see the Mechanic section.
 6. Which rooms count as **"valuable"** for the objective/advisor weighting
    (likely user-configurable) + the Prosthetic Research effect.
 
@@ -83,8 +86,8 @@ minimising rooms lost to destabilisation.
 - [x] **Phase 1b — Rules engine** — `temple/engine.py` (+ `tests/test_temple_engine.py`).
   9×9 grid, placement, accessibility BFS from the entrance, generator Manhattan
   power radius (needs network connection), adjacency tier computation, Garrison
-  conversions, cannot-connect violation checks, and `chokepoint_room_cells`
-  (articulation points = sole links; a redundant loop clears them).
+  conversions, cannot-connect violation checks, and `removable_room_cells`
+  (loose ends destabilisation can delete; a snake leaves only one).
   Offline, no % numbers needed.
 - [x] **Phase 2 — Interactive editor (Qt)** — `temple/editor.py` (+ headless
   smoke test `tests/test_temple_editor.py`). 9×9 painter grid, room palette
@@ -112,7 +115,7 @@ minimising rooms lost to destabilisation.
   tier = highest tier whose threshold is met (cap 3, or `fixed_tier`). Generator
   powers rooms in its Manhattan radius if connected to a path.
 - **Destab risk score:** expected loss ≈ f(random 2–3 tiles + accessible
-  volatile/chokepoint rooms + architect/atziri). Advisor minimises expected loss
+  volatile/removable rooms + architect/atziri). Advisor minimises expected loss
   of high-value rooms.
 
 ## Key sources
