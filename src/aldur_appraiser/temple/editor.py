@@ -110,21 +110,44 @@ def load_layout() -> tuple[Temple | None, str, list[str]]:
     return None, "", []
 
 
+_ROOM_PIXMAPS = None
+
+
+def _room_pixmaps():
+    """room id -> QPixmap of the official icon (cached once per process; empty if
+    icons can't be fetched, so the editor falls back to coloured tiles)."""
+    global _ROOM_PIXMAPS
+    if _ROOM_PIXMAPS is None:
+        from PySide6.QtGui import QPixmap
+
+        from aldur_appraiser.temple.icons import room_icon_paths
+
+        _ROOM_PIXMAPS = {}
+        for rid, path in room_icon_paths().items():
+            pm = QPixmap(str(path))
+            if not pm.isNull():
+                _ROOM_PIXMAPS[rid] = pm
+    return _ROOM_PIXMAPS
+
+
 def build_editor():
     """Construct the editor widget (imports PySide6 lazily). Returns the widget."""
     from PySide6.QtCore import QEvent, QPointF, QRectF, Qt, Signal
-    from PySide6.QtGui import QColor, QFont, QPainter, QPen, QPolygonF
+    from PySide6.QtGui import QColor, QFont, QIcon, QPainter, QPen, QPolygonF
     from PySide6.QtWidgets import (
         QCheckBox,
         QComboBox,
         QHBoxLayout,
         QLabel,
         QListWidget,
+        QListWidgetItem,
         QPushButton,
         QToolTip,
         QVBoxLayout,
         QWidget,
     )
+
+    room_pixmaps = _room_pixmaps()  # room id -> QPixmap (official icons; may be {})
 
     class GridWidget(QWidget):
         cellClicked = Signal(tuple, int)  # (cell, Qt.MouseButton value)
@@ -132,6 +155,7 @@ def build_editor():
         def __init__(self, temple: Temple):
             super().__init__()
             self.temple = temple
+            self.icons = room_pixmaps  # room id -> QPixmap (official icons)
             self.cell = 56
             self.pad = 22  # margin for the 1-9 row/column labels
             self._hover: tuple[int, int] | None = None
@@ -270,10 +294,16 @@ def build_editor():
                     p.setPen(QColor("#d04a4a") if bad else QColor(20, 18, 14))
                     p.drawRect(r)
                     if rid and rid != "path":
+                        tier = self._tiers.get(c, 1)
+                        pm = self.icons.get(rid)
                         p.setPen(QColor("#f0ead6"))
                         p.setFont(self._font)
-                        tier = self._tiers.get(c, 1)
-                        p.drawText(r, Qt.AlignCenter, f"{abbrev(rid)}\n{'I' * tier}")
+                        if pm is not None:
+                            p.drawPixmap(r.adjusted(7, 4, -7, -14).toRect(), pm)
+                            p.drawText(r.adjusted(0, 0, 0, -2),
+                                       Qt.AlignBottom | Qt.AlignHCenter, "I" * tier)
+                        else:
+                            p.drawText(r, Qt.AlignCenter, f"{abbrev(rid)}\n{'I' * tier}")
                     if c in self._boosted:  # Medallion +1 tier
                         p.setPen(QColor("#ffd24a"))
                         p.setFont(self._label_font)
@@ -325,7 +355,10 @@ def build_editor():
             self.palette.addItem(ERASE)
             self.palette.addItem(MEDALLION)
             for rid in ROOMS:
-                self.palette.addItem(f"{ROOMS[rid].name}  [{rid}]")
+                item = QListWidgetItem(f"{ROOMS[rid].name}  [{rid}]")
+                if rid in room_pixmaps:
+                    item.setIcon(QIcon(room_pixmaps[rid]))
+                self.palette.addItem(item)
             self.palette.setCurrentRow(2 + list(ROOMS).index("garrison"))
             self.palette.currentRowChanged.connect(self._on_brush)
 

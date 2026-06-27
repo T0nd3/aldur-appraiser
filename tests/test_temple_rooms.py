@@ -48,6 +48,15 @@ def test_dataset_is_internally_consistent():
     assert validate() == []
 
 
+def test_room_icon_mapping_references_real_rooms():
+    from aldur_appraiser.temple.icons import ROOM_ICON_FILE
+
+    assert set(ROOM_ICON_FILE) <= set(ROOMS)          # no icons for unknown rooms
+    for rid in ("armoury", "generator", "alchemy_lab", "smithy", "garrison"):
+        assert rid in ROOM_ICON_FILE
+    assert "path" not in ROOM_ICON_FILE               # paths are drawn, not iconed
+
+
 def test_keys_match_ids():
     assert all(rid == room.id for rid, room in ROOMS.items())
 
