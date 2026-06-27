@@ -65,10 +65,16 @@ minimising rooms lost to destabilisation.
    Commander is upgraded by *any* adjacent barrack (Garrison/Legion/Transcendent),
    so its 2/3 count almost certainly SUMS across barrack types — the engine counts
    per-room-type today. Needs an UpgradeRule that can match a category/group.
-   Hold-Alt verified so far: Generator, Thaumaturge, Synthflesh Lab, Smithy,
-   Transcendent Barracks, Sacrificial Chamber. Only Spymaster's Study is still
-   fully unseen. Tier %: Garrison T2 12/T3 20, Armoury T1 10/T3 60, Smithy T2 30,
-   Thaumaturge T1 8/T2 15/T3 22, Synthflesh T1 10/T2 20, Transcendent T3 35.
+   Hold-Alt verified: Generator, Thaumaturge, Synthflesh Lab, Smithy, Transcendent
+   Barracks, Sacrificial Chamber, Golem Works, Commander. Commander is upgraded by
+   adjacent Garrison OR Transcendent Barracks (NOT Legion) and upgrades adjacent
+   Garrisons in turn. Tier %: Garrison T2 12/T3 20, Armoury T1 10/T3 60, Smithy T2
+   30, Golem Works T2 15, Commander T1 10, Thaumaturge T1 8/T2 15/T3 22, Synthflesh
+   T1 10/T2 20, Transcendent T3 35.
+   IMPORTANT correction: mobalytics had the Spymaster and Golem Works "effect of
+   Temple Mods from …" lists SWAPPED. The in-game graph + Hold-Alt are authoritative
+   (Golem Works ← Garrison/Commander/Armoury/Smithy/Legion; Spymaster ← Generator/
+   Synthflesh/Flesh Surgeon/Transcendent/Alchemy).
    Note: high-tier ritual rooms (Thaumaturge/Sacrificial/Alchemy/Corruption) hold
    a one-use "device" that destabilises the room when used (optional).
 4. **Exact per-tier % numbers** (value display only; not needed for structure).

@@ -74,28 +74,28 @@ ROOMS: dict[str, Room] = {
     # --- barracks line -------------------------------------------------------
     "garrison": Room(
         id="garrison", name="Garrison", category="barrack",
-        bonus="increased Number of Magic Monster Packs",
+        bonus="increased Number of Magic Monster Packs (T2 12% / T3 20%)",
         aka=("Barracks", "Guardhouse"),
+        upgraded_by=(_u("commander"),),  # Commander's tooltip: "Upgrades: Garrison"
         converts=("garrison->transcendent_barracks", "garrison->legion_barracks"),
         notes=(
-            "Base room; an adjacent Synthflesh Lab converts it to Transcendent "
-            "Barracks, an adjacent Spymaster converts it to Legion Barracks.",
-            "Tier %: T2 ~12% packs / 10% Normal Effectiveness, T3 ~20% / 30% (VERIFY).",
+            "An adjacent Synthflesh Lab converts it to Transcendent Barracks, an "
+            "adjacent Spymaster converts it to Legion Barracks.",
         ),
     ),
     "commander": Room(
         id="commander", name="Commander's Chamber", category="barrack",
-        bonus="Rare Monsters have increased Effectiveness",
+        bonus="Rare Monsters have increased Effectiveness (T1 10%)",
         upgraded_by=(
             _u("garrison", {2: 2, 3: 3}),
-            _u("legion_barracks", {2: 2, 3: 3}),
             _u("transcendent_barracks", {2: 2, 3: 3}),
         ),
         cannot_connect=("spymaster",),
         notes=(
-            "Upgraded by adjacent barracks (Garrison/Legion/Transcendent). The 2/3 "
-            "count likely SUMS across barrack types; the engine counts per-type for "
-            "now (VERIFY — needs a category/group upgrade rule).",
+            "Hold-Alt: upgraded by adjacent Garrison or Transcendent Barracks "
+            "(NOT Legion Barracks); the 2/3 count likely SUMS across the two "
+            "(engine counts per-type for now — needs a group upgrade rule).",
+            "Upgrades adjacent Garrisons in turn.",
         ),
     ),
     "legion_barracks": Room(
@@ -123,8 +123,8 @@ ROOMS: dict[str, Room] = {
     ),
     "golem_works": Room(
         id="golem_works", name="Golem Works", category="production",
-        bonus="increased Effect of Temple Mods from Generators/Synthflesh/Flesh "
-              "Surgeons/Transcendent Barracks/Alchemy Labs; adds High Priest",
+        bonus="increased Effect of Temple Mods from Garrisons/Commanders/"
+              "Armouries/Smithies/Legion Barracks (T2 15%); adds High Priest",
         upgraded_by=(_u("generator"),),
     ),
     "synthflesh_lab": Room(
@@ -203,8 +203,9 @@ ROOMS: dict[str, Room] = {
     # --- utility -------------------------------------------------------------
     "spymaster": Room(
         id="spymaster", name="Spymaster's Study", category="utility",
-        bonus="increased Effect of Temple Mods from Garrisons/Commanders/"
-              "Armouries/Smithies/Legion Barracks; High chance for a Lock Medallion",
+        bonus="increased Effect of Temple Mods from Generators/Synthflesh Labs/"
+              "Flesh Surgeons/Transcendent Barracks/Alchemy Labs; "
+              "High chance for a Lock Medallion",
         manual_tier=True,
         cannot_connect=("commander", "synthflesh_lab"),
         converts=("garrison->legion_barracks",),
