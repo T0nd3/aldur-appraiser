@@ -253,6 +253,14 @@ ROOMS: dict[str, Room] = {
         id="path", name="Path", category="path",
         bonus="No bonus; expands the path / connects rooms.",
     ),
+    # --- Architect's Chamber (spawns on the grid; fight the Architect here) ---
+    "architect_chamber": Room(
+        id="architect_chamber", name="Architect's Chamber", category="special",
+        bonus="The Vaal Architect spawns here; defeating it unlocks Xipocado's "
+              "Console (place Restricted Rooms / Vaults) and Medallions.",
+        notes=("Generates on the grid; defeating the Architect causes greater "
+               "destabilisation (and unlocks Atziri via the Royal Access Chamber).",),
+    ),
     # --- Architect-unlocked special rooms (destabilise after completion) -----
     "royal_access_chamber": Room(
         id="royal_access_chamber", name="Royal Access Chamber", category="special",

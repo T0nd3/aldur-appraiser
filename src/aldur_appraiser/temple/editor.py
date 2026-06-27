@@ -8,7 +8,7 @@ testable headlessly. Launched via `appraiser temple`.
 
 from __future__ import annotations
 
-from aldur_appraiser.temple.engine import GEN_RADIUS, Temple, manhattan
+from aldur_appraiser.temple.engine import Temple
 from aldur_appraiser.temple.rooms import ROOMS, is_volatile
 
 CATEGORY_COLOR = {
@@ -22,6 +22,24 @@ CATEGORY_COLOR = {
 }
 ERASE = "— erase —"  # sentinel palette entry
 
+# Goal presets -> per-room advisor weights. The user picks one instead of tuning
+# individual rooms; missing rooms default to weight 1.0.
+PRESETS: dict[str, dict[str, float]] = {
+    "Balanced (all equal)": {},
+    "Currency & Rarity": {
+        "alchemy_lab": 3.0, "smithy": 2.0, "currency_vault": 3.0, "treasure_vault": 2.0,
+    },
+    "Experience": {"synthflesh_lab": 3.0},
+    "Crafting & Corruption": {
+        "corruption_chamber": 3.0, "sacrificial_chamber": 2.0, "thaumaturge": 2.0,
+        "tablets_vault": 2.0, "uniques_vault": 2.0,
+    },
+    "Monster Quantity & Effectiveness": {
+        "garrison": 2.0, "commander": 2.0, "armoury": 2.0,
+        "legion_barracks": 2.0, "transcendent_barracks": 2.0,
+    },
+}
+
 
 def abbrev(room_id: str) -> str:
     """Short cell label for a room id."""
@@ -31,13 +49,17 @@ def abbrev(room_id: str) -> str:
     return "".join(w[0] for w in name.split()[:2]).upper() or name[:2].upper()
 
 
+def cellname(c: tuple[int, int]) -> str:
+    """Human grid reference matching the 1-9 edge labels (column, row)."""
+    return f"col {c[0] + 1}, row {c[1] + 1}"
+
+
 def build_editor():
     """Construct the editor widget (imports PySide6 lazily). Returns the widget."""
     from PySide6.QtCore import QRectF, Qt, Signal
     from PySide6.QtGui import QColor, QFont, QPainter
     from PySide6.QtWidgets import (
         QComboBox,
-        QDoubleSpinBox,
         QHBoxLayout,
         QLabel,
         QListWidget,
@@ -53,16 +75,20 @@ def build_editor():
             super().__init__()
             self.temple = temple
             self.cell = 56
+            self.pad = 22  # margin for the 1-9 row/column labels
             self._hover: tuple[int, int] | None = None
             self._tiers: dict[tuple[int, int], int] = {}
             self._violation_cells: set[tuple[int, int]] = set()
             self._chokepoints: set[tuple[int, int]] = set()
             self._highlights: set[tuple[int, int]] = set()
             self.setMouseTracking(True)
-            self.setFixedSize(self.cell * temple.size, self.cell * temple.size)
+            n = self.pad + self.cell * temple.size
+            self.setFixedSize(n, n)
             self._font = QFont("DejaVu Sans")
             self._font.setPixelSize(15)
             self._font.setBold(True)
+            self._label_font = QFont("DejaVu Sans")
+            self._label_font.setPixelSize(12)
 
         def refresh(self) -> None:
             self.temple_changed()
@@ -80,7 +106,9 @@ def build_editor():
             self.update()
 
         def _cell_at(self, x: int, y: int) -> tuple[int, int] | None:
-            cx, cy = x // self.cell, y // self.cell
+            if x < self.pad or y < self.pad:
+                return None
+            cx, cy = (x - self.pad) // self.cell, (y - self.pad) // self.cell
             return (cx, cy) if self.temple.in_bounds((cx, cy)) else None
 
         def mousePressEvent(self, e) -> None:  # noqa: N802 (Qt naming)
@@ -101,28 +129,28 @@ def build_editor():
             self.update()
 
         def _power_cells(self) -> set[tuple[int, int]]:
-            """Cells lit by the hovered Generator's power radius."""
+            """Rooms actually powered by the hovered Generator (engine model)."""
             h = self._hover
             if h is None or self.temple.cells.get(h) != "generator":
                 return set()
-            radius = GEN_RADIUS.get(self._tiers.get(h, 1), 3)
-            return {
-                c
-                for c in (
-                    (x, y) for x in range(self.temple.size) for y in range(self.temple.size)
-                )
-                if manhattan(h, c) <= radius
-            }
+            powering = self.temple._generator_powering(self.temple.tiers())
+            return {c for c, gens in powering.items() if h in gens}
 
         def paintEvent(self, _e) -> None:  # noqa: N802
             p = QPainter(self)
             p.setRenderHint(QPainter.Antialiasing)
-            s = self.cell
+            s, pad = self.cell, self.pad
+            # 1-9 column (top) and row (left) labels, to read off recommendations
+            p.setFont(self._label_font)
+            p.setPen(QColor("#b8ae93"))
+            for i in range(self.temple.size):
+                p.drawText(QRectF(pad + i * s, 0, s, pad), Qt.AlignCenter, str(i + 1))
+                p.drawText(QRectF(0, pad + i * s, pad, s), Qt.AlignCenter, str(i + 1))
             power = self._power_cells()
             for x in range(self.temple.size):
                 for y in range(self.temple.size):
                     c = (x, y)
-                    r = QRectF(x * s, y * s, s, s)
+                    r = QRectF(pad + x * s, pad + y * s, s, s)
                     rid = self.temple.cells.get(c)
                     if c in self.temple.blocked:
                         p.fillRect(r, QColor(25, 22, 20))
@@ -172,14 +200,13 @@ def build_editor():
             self.palette.setCurrentRow(1 + list(ROOMS).index("garrison"))
             self.palette.currentRowChanged.connect(self._on_brush)
 
-            # per-room priority (weight) the advisor optimises for; default 1.0
+            # goal preset -> advisor weights (what the player wants to build for)
             self.weights: dict[str, float] = {}
-            self.weight_spin = QDoubleSpinBox()
-            self.weight_spin.setRange(0.0, 10.0)
-            self.weight_spin.setSingleStep(0.5)
-            self.weight_spin.setValue(1.0)
-            self.weight_spin.valueChanged.connect(self._on_weight)
-            self.priorities = QLabel("Priorities: (all 1.0)")
+            self.preset_select = QComboBox()
+            for name in PRESETS:
+                self.preset_select.addItem(name)
+            self.preset_select.currentTextChanged.connect(self._on_preset)
+            self.priorities = QLabel()
             self.priorities.setWordWrap(True)
 
             clear = QPushButton("Clear grid")
@@ -205,8 +232,8 @@ def build_editor():
             left = QVBoxLayout()
             left.addWidget(QLabel("Room (left-click place · right-click erase)"))
             left.addWidget(self.palette, 1)
-            left.addWidget(QLabel("Priority of the selected room (what you want)"))
-            left.addWidget(self.weight_spin)
+            left.addWidget(QLabel("Goal preset (what you want to build for)"))
+            left.addWidget(self.preset_select)
             left.addWidget(self.priorities)
             left.addWidget(QLabel("Tier for sacrifice/assassinate rooms"))
             left.addWidget(self.tier_select)
@@ -224,6 +251,7 @@ def build_editor():
             grid_col.addWidget(self.suggestions)
             row.addLayout(grid_col)
 
+            self._on_preset(self.preset_select.currentText())
             self._refresh()
 
         def _add_card(self) -> None:
@@ -249,30 +277,19 @@ def build_editor():
                 self.grid.set_highlights(())
                 return
             self.grid.set_highlights([ranked[0].cell])
-            lines = [f"{i + 1}. {s.note}  @{s.cell}  (+{s.gain:.1f})" for i, s in enumerate(ranked)]
+            lines = [
+                f"{i + 1}. {s.note}  @ {cellname(s.cell)}  (+{s.gain:.1f})"
+                for i, s in enumerate(ranked)
+            ]
             self.suggestions.setText("Best placements:\n" + "\n".join(lines))
 
         def _on_brush(self, idx: int) -> None:
-            if idx <= 0:
-                self.brush = ERASE
-            else:
-                self.brush = list(ROOMS)[idx - 1]
-                # show the selected room's current priority in the spinbox
-                self.weight_spin.blockSignals(True)
-                self.weight_spin.setValue(self.weights.get(self.brush, 1.0))
-                self.weight_spin.blockSignals(False)
+            self.brush = ERASE if idx <= 0 else list(ROOMS)[idx - 1]
 
-        def _on_weight(self, value: float) -> None:
-            if self.brush == ERASE:
-                return
-            if value == 1.0:
-                self.weights.pop(self.brush, None)
-            else:
-                self.weights[self.brush] = value
-            shown = ", ".join(
-                f"{ROOMS[r].name} {w:g}" for r, w in sorted(self.weights.items())
-            )
-            self.priorities.setText(f"Priorities: {shown or '(all 1.0)'}")
+        def _on_preset(self, name: str) -> None:
+            self.weights = dict(PRESETS.get(name, {}))
+            shown = ", ".join(f"{ROOMS[r].name} {w:g}" for r, w in sorted(self.weights.items()))
+            self.priorities.setText(f"Priorities: {shown or 'all rooms equal'}")
 
         def _on_cell(self, cell, button) -> None:
             from PySide6.QtCore import Qt

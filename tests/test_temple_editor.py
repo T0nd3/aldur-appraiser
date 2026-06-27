@@ -52,19 +52,24 @@ def test_editor_advisor_highlights_best_cell():
     assert w.grid._highlights == {(4, 4)}
 
 
-def test_editor_priority_weight_feeds_the_advisor():
+def test_editor_preset_feeds_the_advisor():
     from PySide6.QtWidgets import QApplication
 
     _app = QApplication.instance() or QApplication([])
     w = build_editor()
     w.temple.place((4, 8), "garrison")          # anchor
     w.hand = ["garrison", "alchemy_lab"]
-    # set the Alchemy Lab's priority to 5 via the spinbox
-    w.brush = "alchemy_lab"
-    w.weight_spin.setValue(5.0)
-    assert w.weights == {"alchemy_lab": 5.0}
+    w.preset_select.setCurrentText("Currency & Rarity")   # weights Alchemy Lab up
+    assert w.weights.get("alchemy_lab", 1.0) > 1.0
     w._suggest()
     assert "Alchemy Lab" in w.suggestions.text().splitlines()[1]
+
+
+def test_cellname_is_one_indexed_col_row():
+    from aldur_appraiser.temple.editor import cellname
+
+    assert cellname((0, 0)) == "col 1, row 1"
+    assert cellname((3, 6)) == "col 4, row 7"
 
 
 def test_editor_applies_tier_override_to_manual_room():
