@@ -57,6 +57,22 @@ def test_path_that_connects_a_generator_scores_positive():
     assert s.gain > 0
 
 
+def test_volatile_room_is_discounted_in_score():
+    # a persistent room outscores a one-use (volatile) room of the same tier
+    persistent = _temple()
+    persistent.place((4, 4), "garrison")          # tier 1, persists
+    volatile = _temple()
+    volatile.place((4, 4), "treasure_vault")      # tier 1, self-destabilises
+    assert score(persistent) > score(volatile)
+
+
+def test_suggest_flags_one_use_rooms():
+    t = _temple(entrance=(4, 8))
+    t.place((4, 7), "garrison")                   # something to connect to
+    best = [s for s in suggest(t, ["treasure_vault"], top=3) if s.card == "treasure_vault"][0]
+    assert "one-use" in best.note
+
+
 def test_plan_hand_consumes_cards_and_improves_score():
     t = _temple(entrance=(4, 8))
     t.place((4, 7), "commander")

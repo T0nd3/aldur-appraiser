@@ -17,13 +17,16 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from aldur_appraiser.temple.engine import Cell, Temple
-from aldur_appraiser.temple.rooms import ROOMS
+from aldur_appraiser.temple.rooms import ROOMS, is_volatile
 
 VIOLATION_PENALTY = 5.0
 # A restricted (articulation) room always destabilises on exit, so its value is
 # discounted — this nudges the advisor to add redundant paths that de-restrict a
 # valuable room rather than leave it as a sole connection.
 RESTRICTED_DISCOUNT = 0.6
+# A volatile room (Treasure Vault / Architect reward rooms) self-destabilises once
+# used, so it won't persist in a re-runnable temple — discounted the same way.
+VOLATILE_DISCOUNT = 0.6
 
 
 @dataclass
@@ -42,9 +45,12 @@ def score(temple: Temple, values: dict[str, float] | None = None) -> float:
     restricted = temple.restricted_room_cells()
     total = 0.0
     for c, tier in temple.tiers().items():
-        worth = values.get(temple.effective_room_id(c), 1.0) * tier
-        if c in restricted:
+        rid = temple.effective_room_id(c)
+        worth = values.get(rid, 1.0) * tier
+        if c in restricted:           # always destabilises on exit
             worth *= 1.0 - RESTRICTED_DISCOUNT
+        if is_volatile(ROOMS[rid]):   # self-destabilises once used
+            worth *= 1.0 - VOLATILE_DISCOUNT
         total += worth
     total -= VIOLATION_PENALTY * len(temple.connection_violations())
     return total
@@ -89,6 +95,8 @@ def _evaluate(temple: Temple, card: str, cell: Cell, base: float,
         note = f"{name} → T{result_tier}"
         if upgrades:
             note += f", upgrades {upgrades} neighbour(s)"
+        if is_volatile(ROOMS[card]):
+            note += " [one-use]"
     return Suggestion(card, cell, gain, result_tier, upgrades, note)
 
 
