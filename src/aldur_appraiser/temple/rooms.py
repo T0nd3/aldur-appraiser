@@ -62,6 +62,8 @@ class Room:
     fixed_tier: int | None = None        # rooms that can't be upgraded (e.g. Vault)
     architect_room: bool = False         # unlocked via Architect; destabilises on complete
     volatile: bool = False               # destabilises (is consumed) once opened/completed
+    destabilises_at: int | None = None   # craft rooms that destabilise *only* once they
+    #                                      reach this tier's device (e.g. Alchemy Lab T3)
     manual_tier: bool = False            # tier comes from a player action (sacrifice /
     #                                      assassinate), not the layout -> set by hand
     upgraded_by: tuple[Upgrade, ...] = ()
@@ -138,6 +140,15 @@ def is_volatile(room: Room) -> bool:
     Architect reward rooms) — placing it gives a one-time reward but it won't
     persist, so it's a poor pick for a lasting, re-runnable temple."""
     return room.volatile or room.architect_room
+
+
+def destabilises(room: Room, tier: int = 1) -> bool:
+    """Will this room destabilise? Vaults/Architect rooms always do (`is_volatile`);
+    some craft rooms (Alchemy Lab, Thaumaturge, …) only once they reach their
+    device tier (e.g. Alchemy Lab T3's Soul Core Infuser destabilises on use)."""
+    if is_volatile(room):
+        return True
+    return room.destabilises_at is not None and tier >= room.destabilises_at
 
 
 def can_orphan(room: Room) -> bool:
@@ -233,6 +244,7 @@ ROOMS: dict[str, Room] = {
         id="flesh_surgeon", name="Flesh Surgeon's Ward", category="production",
         bonus="Unique Monsters have increased Effectiveness (T1 10%); Limb "
               "Modification; T3 Transcension Device",
+        destabilises_at=3,  # T3 Transcension Device destabilises the room on use
         upgraded_by=(
             _count(2, ["synthflesh_lab"], 1),
             _count(3, ["synthflesh_lab"], 1, min_tier=2),  # needs a T2+ Synthflesh
@@ -262,6 +274,7 @@ ROOMS: dict[str, Room] = {
         bonus="increased Effect of Temple Mods from Corruption Chambers/Treasure "
               "Vaults/Sacrificial Chambers (T1 8% / T2 15% / T3 22%); "
               "adds Quadrilla Sergeant",
+        destabilises_at=3,  # T3 Gem Corrupter destabilises the room on use
         upgraded_by=(
             _count(2, ["sacrificial_chamber"], 1),
             _count(3, ["sacrificial_chamber"], 2),
@@ -274,12 +287,14 @@ ROOMS: dict[str, Room] = {
         id="alchemy_lab", name="Alchemy Lab", category="ritual",
         bonus="increased Rarity of Items and Gold found (T1 10% / T2 25%); T1-2 "
               "Soul Core Cache, T3 Soul Core Infuser (-> Core Destabiliser)",
+        destabilises_at=3,  # ALT-verified: T3 Soul Core Infuser destabilises on use
         upgraded_by=(_count(2, ["thaumaturge"], 1), _count(3, ["thaumaturge"], 2)),
     ),
     "corruption_chamber": Room(
         id="corruption_chamber", name="Corruption Chamber", category="ritual",
         bonus="Rare Monsters have a chance for an additional Modifier; T1-2 "
               "Corruption Altar, T3 Corruption Instiller (-> Architect's Orb)",
+        destabilises_at=3,  # T3 Corruption Instiller destabilises the room on use
         upgraded_by=(
             _count(2, ["sacrificial_chamber", "thaumaturge"], 1),
             _count(3, ["sacrificial_chamber", "thaumaturge"], 2),
@@ -290,6 +305,7 @@ ROOMS: dict[str, Room] = {
         bonus="increased number of Rare Chests; T3 Morphology Mechanism "
               "(-> Vaal Cultivation Orb)",
         manual_tier=True,
+        destabilises_at=3,  # T3 Morphology Mechanism destabilises the room on use
         notes=(
             "Upgraded by SACRIFICING other placed rooms (irreversible), not by "
             "adjacency. Upgrades adjacent Generator/Thaumaturge/Corruption Chamber.",

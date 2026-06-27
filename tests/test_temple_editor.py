@@ -178,6 +178,21 @@ def test_transcendent_progress_persists_across_sessions(tmp_path, monkeypatch):
     assert w2.transcendent_check.isChecked()
 
 
+def test_alchemy_lab_counts_as_destabilising_only_at_tier_3():
+    from PySide6.QtWidgets import QApplication
+
+    _app = QApplication.instance() or QApplication([])
+    w = build_editor()
+    w.temple.place((4, 4), "alchemy_lab")       # T1 -> safe
+    w._refresh()
+    assert "Destabilising: 0" in w.status.text()
+    w.temple.place((5, 4), "thaumaturge")       # two adjacent Thaumaturges -> T3
+    w.temple.place((3, 4), "thaumaturge")
+    w._refresh()
+    assert w.temple.room_tier((4, 4)) == 3
+    assert "Destabilising: 1" in w.status.text()  # the T3 Alchemy Lab now destabilises
+
+
 def test_medallion_brush_boosts_a_room_to_tier_4():
     from PySide6.QtCore import Qt
     from PySide6.QtWidgets import QApplication

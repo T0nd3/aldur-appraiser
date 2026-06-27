@@ -9,7 +9,7 @@ testable headlessly. Launched via `appraiser temple`.
 from __future__ import annotations
 
 from aldur_appraiser.temple.engine import Temple
-from aldur_appraiser.temple.rooms import ROOMS, can_orphan, is_volatile
+from aldur_appraiser.temple.rooms import ROOMS, can_orphan, destabilises, is_volatile
 
 CATEGORY_COLOR = {
     "barrack": "#3b6ea5",
@@ -255,8 +255,9 @@ def build_editor():
                     if rid and rid != "path" and is_volatile(ROOMS[rid]):
                         p.setPen(QColor("#d04ad0"))  # one-use: consumed on completion
                         p.drawRect(r.adjusted(3, 3, -3, -3))
-                        # destabilisation warning: a ⚠ triangle in the top-right
-                        # corner so the user spots rooms that destabilise on use.
+                    # destabilisation warning: a ⚠ triangle in the top-right corner.
+                    # Vaults always destabilise; craft rooms only at their device tier.
+                    if rid and rid != "path" and destabilises(ROOMS[rid], self._tiers.get(c, 1)):
                         ax, top = r.right() - 13, r.top() + 4
                         tri = QPolygonF([
                             QPointF(ax, top),
@@ -539,7 +540,9 @@ def build_editor():
             viol = len(self.temple.connection_violations())
             removable = len(self.temple.removable_room_cells())
             volatile = sum(
-                1 for c in self.temple.room_cells() if is_volatile(ROOMS[self.temple.cells[c]])
+                1
+                for c in self.temple.room_cells()
+                if destabilises(ROOMS[self.temple.cells[c]], tiers.get(c, 1))
             )
             disconnected = len(disconnected_rooms(self.temple))
             self.status.setText(
