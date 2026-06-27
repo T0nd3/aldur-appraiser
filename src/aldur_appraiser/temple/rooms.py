@@ -137,8 +137,8 @@ ROOMS: dict[str, Room] = {
     ),
     "flesh_surgeon": Room(
         id="flesh_surgeon", name="Flesh Surgeon's Ward", category="production",
-        bonus="Unique Monsters have increased Effectiveness; Limb Modification; "
-              "T3 Transcension Device",
+        bonus="Unique Monsters have increased Effectiveness (T1 10%); Limb "
+              "Modification; T3 Transcension Device",
         upgraded_by=(_u("synthflesh_lab", {2: 1}),),
         notes=("A Synthflesh Lab powered by a Generator upgrades it to T3.",),
     ),
@@ -168,8 +168,8 @@ ROOMS: dict[str, Room] = {
     ),
     "alchemy_lab": Room(
         id="alchemy_lab", name="Alchemy Lab", category="ritual",
-        bonus="increased Rarity of Items and Gold found; T1-2 Soul Core Cache, "
-              "T3 Soul Core Infuser (-> Core Destabiliser)",
+        bonus="increased Rarity of Items and Gold found (T1 10%); T1-2 Soul Core "
+              "Cache, T3 Soul Core Infuser (-> Core Destabiliser)",
         upgraded_by=(_u("thaumaturge", {2: 1, 3: 2}),),
     ),
     "corruption_chamber": Room(
