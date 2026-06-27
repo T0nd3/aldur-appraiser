@@ -282,13 +282,16 @@ ROOMS: dict[str, Room] = {
     # --- utility -------------------------------------------------------------
     "spymaster": Room(
         id="spymaster", name="Spymaster's Study", category="utility",
-        bonus="increased Effect of Temple Mods from Generators/Synthflesh Labs/"
-              "Flesh Surgeons/Transcendent Barracks/Alchemy Labs; "
-              "High chance for a Lock Medallion",
+        bonus="8% increased Effect of Temple Mods (per tier) from Generators, "
+              "Synthflesh Labs, Flesh Surgeons, Transcendent Barracks, and "
+              "Alchemy Labs.",
         manual_tier=True,
         cannot_connect=("commander", "synthflesh_lab"),
         converts=("garrison->legion_barracks",),
-        notes=("Upgraded by assassinating other Spymasters, not by adjacency.",),
+        notes=(
+            "Room Tier can be increased by defeating other Spymasters (ALT-verified), "
+            "not by adjacency.",
+        ),
     ),
     # --- path connector ------------------------------------------------------
     "path": Room(
