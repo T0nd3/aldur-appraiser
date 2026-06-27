@@ -237,21 +237,24 @@ ROOMS: dict[str, Room] = {
     ),
     "currency_vault": Room(
         id="currency_vault", name="Currency Vault", category="special",
-        architect_room=True, bonus="Two Treasure Chests of random Currency",
+        architect_room=True, aka=("Kishara's Vault",),
+        bonus="Rare Treasury Chests of Currency",
     ),
     "lineage_gems_vault": Room(
         id="lineage_gems_vault", name="Lineage Gems Vault", category="special",
-        architect_room=True, bonus="A random Lineage Support Gem",
+        architect_room=True, aka=("Vault of Reverence",),
+        bonus="A Historic Chest with a random Lineage Support Gem",
     ),
     "tablets_vault": Room(
         id="tablets_vault", name="Tablets Vault", category="special",
-        architect_room=True,
-        bonus="Corrupted Precursor Machine (modifies a Precursor Tablet; "
+        architect_room=True, aka=("Tablet Research Vault",),
+        bonus="Corrupted Precursor Machine (corrupts a Precursor Tablet; "
               "-> Ancient Infuser)",
     ),
     "uniques_vault": Room(
         id="uniques_vault", name="Uniques Vault", category="special",
-        architect_room=True, bonus="A Display granting a random Unique Item",
+        architect_room=True, aka=("Ancient Reliquary Vault",),
+        bonus="A Display granting a random Unique Item (e.g. Atziri's Disdain)",
     ),
 }
 
