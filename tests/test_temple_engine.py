@@ -33,13 +33,14 @@ def test_garrison_t3_requires_both_commander_and_armoury():
 
 
 def test_smithy_counts_golem_and_generator_together():
-    # group sum: a Generator (power) + a Golem Works count as 2 toward Smithy T3
+    # group sum: a Generator (power via a Path) + a Golem Works count as 2 -> T3
     t = _temple(entrance=(0, 0))
-    t.place((0, 0), "generator")        # powers adjacent
-    t.place((1, 0), "smithy")
-    assert t.room_tier((1, 0)) == 2     # 1 source (generator)
-    t.place((1, 1), "golem_works")
-    assert t.room_tier((1, 0)) == 3     # 2 sources (generator + golem)
+    t.place((0, 0), "generator")        # on the entrance -> accessible
+    t.place((1, 0), "path")             # the Generator feeds this Path
+    t.place((1, 1), "smithy")           # beside the powered Path
+    assert t.room_tier((1, 1)) == 2     # 1 source (generator via the path)
+    t.place((2, 1), "golem_works")      # adjacent Golem Works (counts by adjacency)
+    assert t.room_tier((1, 1)) == 3     # 2 sources (generator + golem)
 
 
 def test_generator_conducts_power_along_paths():
@@ -63,11 +64,20 @@ def test_fixed_tier_room_never_upgrades():
 # --- generator power (radius + must be connected) ----------------------------
 
 
-def test_generator_powers_smithy_within_radius_when_connected():
+def test_generator_powers_smithy_via_a_path():
     t = _temple(entrance=(0, 0))
     t.place((0, 0), "generator")   # at the entrance -> accessible
-    t.place((1, 0), "smithy")      # manhattan 1 <= T1 radius (3)
-    assert t.room_tier((1, 0)) >= 2
+    t.place((1, 0), "path")        # the Generator feeds this Path (step 1, in range)
+    t.place((1, 1), "smithy")      # beside the powered Path
+    assert t.room_tier((1, 1)) >= 2
+
+
+def test_generator_does_not_power_a_directly_adjacent_room():
+    # a room merely touching the Generator (no Path between) is NOT powered
+    t = _temple(entrance=(0, 0))
+    t.place((0, 0), "generator")   # accessible
+    t.place((1, 0), "smithy")      # directly adjacent, but no Path link
+    assert t.room_tier((1, 0)) == 1
 
 
 def test_disconnected_generator_does_not_power():

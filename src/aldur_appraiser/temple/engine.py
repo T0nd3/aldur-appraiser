@@ -200,9 +200,11 @@ class Temple:
     # --- tiers ---------------------------------------------------------------
 
     def _generator_powering(self, cur: dict[Cell, int]) -> dict[Cell, set[Cell]]:
-        """room cell -> set of Generator cells powering it. A Generator on the road
-        network powers directly adjacent rooms and conducts along connected Path
-        cells up to its tier's range, powering rooms beside those powered paths."""
+        """room cell -> set of Generator cells powering it. Power flows only along
+        the road: a Generator feeds the Path cells it sits next to and conducts
+        through connected Paths up to its tier's range, powering rooms beside those
+        powered paths. A room merely touching the Generator (with no Path between)
+        is NOT powered — the link must run through a Path."""
         accessible = self.accessible_cells()
         powering: dict[Cell, set[Cell]] = {}
         gens = [c for c in self.cells if self.cells[c] == "generator"]
@@ -210,7 +212,7 @@ class Temple:
             if g not in accessible:
                 continue  # an unconnected Generator provides no power
             rng = GEN_RADIUS.get(cur.get(g, 1), 0)
-            reached: set[Cell] = {n for n in self.neighbors4(g) if self.is_room(n)}
+            reached: set[Cell] = set()  # rooms powered only via Paths, not adjacency
             seen = {g}
             q: deque[tuple[Cell, int]] = deque()
             for p in self.neighbors4(g):
