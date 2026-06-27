@@ -148,6 +148,36 @@ def test_editor_marks_rooms_disconnected_from_entrance():
     assert "Destabilising: 1" in w.status.text()    # the vault destabilises on use
 
 
+def test_transcendent_progress_checkbox_raises_max_tier():
+    from PySide6.QtWidgets import QApplication
+
+    _app = QApplication.instance() or QApplication([])
+    w = build_editor()
+    assert w.temple.max_tier == 3
+    assert w.tier_select.findData(4) < 0          # no Tier 4 option yet
+    w.transcendent_check.setChecked(True)
+    assert w.temple.max_tier == 4
+    assert w.tier_select.findData(4) >= 0          # Tier 4 now selectable
+    w.transcendent_check.setChecked(False)
+    assert w.temple.max_tier == 3
+    assert w.tier_select.findData(4) < 0
+
+
+def test_transcendent_progress_persists_across_sessions(tmp_path, monkeypatch):
+    from PySide6.QtWidgets import QApplication
+
+    import aldur_appraiser.temple.editor as ed
+
+    monkeypatch.setattr(ed, "layout_path", lambda: tmp_path / "layout.json")
+    _app = QApplication.instance() or QApplication([])
+
+    w = ed.build_editor()
+    w.transcendent_check.setChecked(True)
+    w2 = ed.build_editor()
+    assert w2.temple.max_tier == 4
+    assert w2.transcendent_check.isChecked()
+
+
 def test_cellname_is_one_indexed_col_row():
     from aldur_appraiser.temple.editor import cellname
 

@@ -25,7 +25,7 @@ from aldur_appraiser.temple.rooms import ROOMS
 
 GRID_SIZE = 9
 ENTRANCE = (4, 8)  # bottom-centre; the build grows up from here (VERIFY orientation)
-GEN_RADIUS = {1: 3, 2: 4, 3: 5}  # Generator Manhattan power range by tier
+GEN_RADIUS = {1: 3, 2: 4, 3: 5, 4: 6}  # Generator Manhattan power range by tier
 
 Cell = tuple[int, int]
 
@@ -45,12 +45,16 @@ class Temple:
     # (x, y) -> tier, for rooms whose tier comes from a player action (sacrifice /
     # assassinate) and so can't be derived from the layout (manual_tier rooms).
     tier_overrides: dict[Cell, int] = field(default_factory=dict)
+    # Highest tier a room can reach. Default 3; the Atlas "Transcendent Progress"
+    # node raises it to 4 (rooms may then climb one rank higher).
+    max_tier: int = 3
 
     # --- grid basics ---------------------------------------------------------
 
     def copy(self) -> Temple:
         t = Temple(self.size, self.entrance, set(self.blocked), dict(self.cells))
         t.tier_overrides = dict(self.tier_overrides)
+        t.max_tier = self.max_tier
         return t
 
     def to_dict(self) -> dict:
@@ -61,6 +65,7 @@ class Temple:
             "blocked": [list(c) for c in sorted(self.blocked)],
             "cells": {f"{x},{y}": rid for (x, y), rid in self.cells.items()},
             "tier_overrides": {f"{x},{y}": t for (x, y), t in self.tier_overrides.items()},
+            "max_tier": self.max_tier,
         }
 
     @classmethod
@@ -76,6 +81,7 @@ class Temple:
             cells={key(k): v for k, v in d.get("cells", {}).items()},
         )
         t.tier_overrides = {key(k): int(v) for k, v in d.get("tier_overrides", {}).items()}
+        t.max_tier = int(d.get("max_tier", 3))
         return t
 
     def in_bounds(self, c: Cell) -> bool:
@@ -231,7 +237,7 @@ class Temple:
         for rule in room.upgraded_by:
             if self._rule_satisfied(c, rule, cur, powering):
                 tier = max(tier, rule.tier)
-        return min(tier, 3)
+        return min(tier, self.max_tier)
 
     def tiers(self) -> dict[Cell, int]:
         """Tier of every placed room (paths excluded).
@@ -247,7 +253,7 @@ class Temple:
             if room.fixed_tier is not None:
                 cur[c] = room.fixed_tier
             elif room.manual_tier:
-                cur[c] = self.tier_overrides.get(c, 1)
+                cur[c] = min(self.tier_overrides.get(c, 1), self.max_tier)
             else:
                 cur[c] = 1
         for _ in range(6):

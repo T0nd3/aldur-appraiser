@@ -146,6 +146,24 @@ def test_override_ignored_for_layout_upgraded_room():
     assert t.room_tier((4, 4)) == 1            # override ignored; no adjacent garrisons
 
 
+def test_max_tier_caps_rooms_and_transcendent_raises_it():
+    # a manual_tier room may climb to 4 only once the cap (Transcendent Progress)
+    # allows it; by default it's clamped to 3.
+    t = _temple()
+    t.place((4, 4), "sacrificial_chamber")     # manual_tier room
+    t.tier_overrides[(4, 4)] = 4
+    assert t.room_tier((4, 4)) == 3            # capped at the default max of 3
+    t.max_tier = 4                              # Transcendent Progress on
+    assert t.room_tier((4, 4)) == 4
+
+
+def test_max_tier_survives_dict_roundtrip():
+    t = _temple()
+    t.max_tier = 4
+    assert Temple.from_dict(t.to_dict()).max_tier == 4
+    assert Temple.from_dict(Temple().to_dict()).max_tier == 3   # default
+
+
 # --- conversions -------------------------------------------------------------
 
 

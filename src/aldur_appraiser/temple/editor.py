@@ -114,6 +114,7 @@ def build_editor():
     from PySide6.QtCore import QPointF, QRectF, Qt, Signal
     from PySide6.QtGui import QColor, QFont, QPainter, QPen, QPolygonF
     from PySide6.QtWidgets import (
+        QCheckBox,
         QComboBox,
         QHBoxLayout,
         QLabel,
@@ -304,10 +305,13 @@ def build_editor():
 
             clear = QPushButton("Clear grid")
             clear.clicked.connect(self._clear)
+            # Atlas "Transcendent Progress" node: raises the max room tier 3 -> 4.
+            self.transcendent_check = QCheckBox("Transcendent Progress (max tier 4)")
+            self.transcendent_check.setChecked(self.temple.max_tier >= 4)
+            self.transcendent_check.toggled.connect(self._on_transcendent)
             # tier picker for rooms upgraded by a player action (sacrifice/assassinate)
             self.tier_select = QComboBox()
-            for t in (1, 2, 3):
-                self.tier_select.addItem(f"Tier {t}", t)
+            self._populate_tier_select()
             self.status = QLabel()
 
             # --- per-run advisor: a hand of drawn cards + suggestions ----------
@@ -345,6 +349,7 @@ def build_editor():
             left.addWidget(QLabel("Goal preset (what you want to build for)"))
             left.addWidget(self.preset_select)
             left.addWidget(self.priorities)
+            left.addWidget(self.transcendent_check)
             left.addWidget(QLabel("Tier for sacrifice/assassinate rooms"))
             left.addWidget(self.tier_select)
             left.addWidget(clear)
@@ -444,6 +449,25 @@ def build_editor():
                 for i, s in enumerate(ranked)
             ]
             self.suggestions.setText("Best placements:\n" + "\n".join(lines))
+
+        def _populate_tier_select(self) -> None:
+            """Fill the manual-tier dropdown with 1..max_tier, keeping the choice."""
+            keep = self.tier_select.currentData()
+            self.tier_select.blockSignals(True)
+            self.tier_select.clear()
+            for t in range(1, self.temple.max_tier + 1):
+                self.tier_select.addItem(f"Tier {t}", t)
+            if keep:
+                idx = self.tier_select.findData(min(keep, self.temple.max_tier))
+                if idx >= 0:
+                    self.tier_select.setCurrentIndex(idx)
+            self.tier_select.blockSignals(False)
+
+        def _on_transcendent(self, checked: bool) -> None:
+            self.temple.max_tier = 4 if checked else 3
+            self._populate_tier_select()
+            self._refresh()
+            self._persist()
 
         def _on_brush(self, idx: int) -> None:
             self.brush = ERASE if idx <= 0 else list(ROOMS)[idx - 1]
