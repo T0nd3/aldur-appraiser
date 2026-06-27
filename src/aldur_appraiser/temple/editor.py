@@ -21,6 +21,7 @@ CATEGORY_COLOR = {
     "path": "#4a4a4a",
 }
 ERASE = "— erase —"  # sentinel palette entry
+MEDALLION = "✦ Medallion +1 Tier"  # brush: click a room to toggle a +1-tier boost
 
 # Goal presets -> per-room advisor weights. The user picks one instead of tuning
 # individual rooms; missing rooms default to weight 1.0. NB: Vaults are NOT
@@ -137,6 +138,7 @@ def build_editor():
             self._violation_cells: set[tuple[int, int]] = set()
             self._removable: set[tuple[int, int]] = set()
             self._disconnected: set[tuple[int, int]] = set()
+            self._boosted: set[tuple[int, int]] = set()
             # cell -> rank (0 = best). Equal-value cells share a rank/colour;
             # weaker ones get a higher rank and a dimmer shade.
             self._highlights: dict[tuple[int, int], int] = {}
@@ -175,6 +177,7 @@ def build_editor():
             # rooms not reachable from the entrance: normal ones need a Path/road
             # drawn (Vaults/Royal Access/Architect may legally stay orphans).
             self._disconnected = disconnected_rooms(self.temple)
+            self._boosted = set(self.temple.medallion_boosts)
             self.update()
 
         def _cell_at(self, x: int, y: int) -> tuple[int, int] | None:
@@ -245,6 +248,10 @@ def build_editor():
                         p.setFont(self._font)
                         tier = self._tiers.get(c, 1)
                         p.drawText(r, Qt.AlignCenter, f"{abbrev(rid)}\n{'I' * tier}")
+                    if c in self._boosted:  # Medallion +1 tier
+                        p.setPen(QColor("#ffd24a"))
+                        p.setFont(self._label_font)
+                        p.drawText(r.adjusted(4, 2, -2, -2), Qt.AlignTop | Qt.AlignLeft, "✦")
                     if rid and rid != "path" and is_volatile(ROOMS[rid]):
                         p.setPen(QColor("#d04ad0"))  # one-use: consumed on completion
                         p.drawRect(r.adjusted(3, 3, -3, -3))
@@ -289,9 +296,10 @@ def build_editor():
 
             self.palette = QListWidget()
             self.palette.addItem(ERASE)
+            self.palette.addItem(MEDALLION)
             for rid in ROOMS:
                 self.palette.addItem(f"{ROOMS[rid].name}  [{rid}]")
-            self.palette.setCurrentRow(1 + list(ROOMS).index("garrison"))
+            self.palette.setCurrentRow(2 + list(ROOMS).index("garrison"))
             self.palette.currentRowChanged.connect(self._on_brush)
 
             # goal preset -> advisor weights (what the player wants to build for)
@@ -367,7 +375,8 @@ def build_editor():
             legend = QLabel(
                 "Markers:  ⚠ amber = destabilises on use (avoid / mind its effect)   ·   "
                 "orange = deletable loose end   ·   cyan dashed = not connected to entrance   ·   "
-                "gold = suggested placement"
+                "gold = suggested placement   ·   ✦ = Medallion +1 tier "
+                "(pick the Medallion brush, click a room)"
             )
             legend.setWordWrap(True)
             legend.setStyleSheet("color: #9b927d;")
@@ -388,7 +397,7 @@ def build_editor():
             self._refresh()
 
         def _add_card(self) -> None:
-            if self.brush != ERASE:
+            if self.brush in ROOMS:
                 self.hand.append(self.brush)
                 self.hand_list.addItem(ROOMS[self.brush].name)
 
@@ -405,7 +414,7 @@ def build_editor():
             self.suggestions.setText("Add your drawn cards, then Suggest.")
 
         def _add_medallion(self) -> None:
-            if self.brush != ERASE:
+            if self.brush in ROOMS:
                 self.medallions.append(self.brush)
                 self.medallion_list.addItem(ROOMS[self.brush].name)
                 self._persist()
@@ -470,7 +479,12 @@ def build_editor():
             self._persist()
 
         def _on_brush(self, idx: int) -> None:
-            self.brush = ERASE if idx <= 0 else list(ROOMS)[idx - 1]
+            if idx <= 0:
+                self.brush = ERASE
+            elif idx == 1:
+                self.brush = MEDALLION
+            else:
+                self.brush = list(ROOMS)[idx - 2]
 
         def _on_preset(self, name: str) -> None:
             self.weights = dict(PRESETS.get(name, {}))
@@ -481,6 +495,17 @@ def build_editor():
 
         def _on_cell(self, cell, button) -> None:
             from PySide6.QtCore import Qt
+
+            # Medallion brush: left-click a placed room to toggle its +1-tier boost.
+            if self.brush == MEDALLION and button != int(Qt.RightButton.value):
+                if self.temple.is_room(cell):
+                    if cell in self.temple.medallion_boosts:
+                        self.temple.medallion_boosts.discard(cell)
+                    else:
+                        self.temple.medallion_boosts.add(cell)
+                    self._refresh()
+                    self._persist()
+                return
 
             erase = self.brush == ERASE or button == int(Qt.RightButton.value)
             self.temple.remove(cell)

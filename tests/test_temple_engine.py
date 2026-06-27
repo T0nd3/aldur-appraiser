@@ -167,6 +167,29 @@ def test_max_tier_caps_rooms_and_transcendent_raises_it():
     assert t.room_tier((4, 4)) == 4
 
 
+def test_medallion_adds_one_tier_capped_at_max():
+    t = _temple()
+    t.place((4, 4), "garrison")            # a layout room at T1
+    assert t.room_tier((4, 4)) == 1
+    t.medallion_boosts.add((4, 4))
+    assert t.room_tier((4, 4)) == 2        # +1 from the medallion
+    t.place((5, 5), "sacrificial_chamber")
+    t.tier_overrides[(5, 5)] = 3
+    t.medallion_boosts.add((5, 5))
+    assert t.room_tier((5, 5)) == 3        # 3 + 1 clamped to max_tier 3
+    t.max_tier = 4
+    assert t.room_tier((5, 5)) == 4        # Transcendent Progress lets it reach 4
+    t.remove((5, 5))
+    assert (5, 5) not in t.medallion_boosts
+
+
+def test_medallion_boosts_survive_dict_roundtrip():
+    t = _temple()
+    t.place((1, 1), "armoury")
+    t.medallion_boosts.add((1, 1))
+    assert Temple.from_dict(t.to_dict()).medallion_boosts == {(1, 1)}
+
+
 def test_connection_blocked_caps_alchemy_per_armoury():
     t = _temple()
     t.place((4, 4), "armoury")

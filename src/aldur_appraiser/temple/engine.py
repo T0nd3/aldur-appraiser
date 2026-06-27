@@ -48,6 +48,8 @@ class Temple:
     # Highest tier a room can reach. Default 3; the Atlas "Transcendent Progress"
     # node raises it to 4 (rooms may then climb one rank higher).
     max_tier: int = 3
+    # cells a Medallion was applied to (+1 tier on any room, capped at max_tier).
+    medallion_boosts: set[Cell] = field(default_factory=set)
 
     # --- grid basics ---------------------------------------------------------
 
@@ -55,6 +57,7 @@ class Temple:
         t = Temple(self.size, self.entrance, set(self.blocked), dict(self.cells))
         t.tier_overrides = dict(self.tier_overrides)
         t.max_tier = self.max_tier
+        t.medallion_boosts = set(self.medallion_boosts)
         return t
 
     def to_dict(self) -> dict:
@@ -66,6 +69,7 @@ class Temple:
             "cells": {f"{x},{y}": rid for (x, y), rid in self.cells.items()},
             "tier_overrides": {f"{x},{y}": t for (x, y), t in self.tier_overrides.items()},
             "max_tier": self.max_tier,
+            "medallion_boosts": [list(c) for c in sorted(self.medallion_boosts)],
         }
 
     @classmethod
@@ -82,6 +86,7 @@ class Temple:
         )
         t.tier_overrides = {key(k): int(v) for k, v in d.get("tier_overrides", {}).items()}
         t.max_tier = int(d.get("max_tier", 3))
+        t.medallion_boosts = {tuple(c) for c in d.get("medallion_boosts", [])}  # type: ignore[misc]
         return t
 
     def in_bounds(self, c: Cell) -> bool:
@@ -105,6 +110,7 @@ class Temple:
     def remove(self, c: Cell) -> None:
         self.cells.pop(c, None)
         self.tier_overrides.pop(c, None)
+        self.medallion_boosts.discard(c)
 
     def connection_blocked(self, placing_id: str, neighbor_cell: Cell) -> bool:
         """True if a newly-placed `placing_id` may NOT connect to the room at
@@ -258,30 +264,36 @@ class Temple:
                 tier = max(tier, rule.tier)
         return min(tier, self.max_tier)
 
+    def _boosted(self, c: Cell, tier: int) -> int:
+        """Apply a Medallion (+1 tier on any room) and clamp to the max tier."""
+        if c in self.medallion_boosts:
+            tier += 1
+        return min(tier, self.max_tier)
+
     def tiers(self) -> dict[Cell, int]:
         """Tier of every placed room (paths excluded).
 
         Iterated to a fixed point because tiers can depend on neighbours' tiers
         (Generator power range; `source_min_tier` rules like Flesh Surgeon needing
-        a T2+ Synthflesh). Tiers only rise and are capped at 3, so it converges in
-        a few passes."""
+        a T2+ Synthflesh). A Medallion adds +1 to any room (capped at `max_tier`)
+        and propagates like a normal tier. Tiers only rise, so it converges fast."""
         rooms = self.room_cells()
         cur: dict[Cell, int] = {}
         for c in rooms:
             room = ROOMS[self.effective_room_id(c)]
             if room.fixed_tier is not None:
-                cur[c] = room.fixed_tier
+                cur[c] = self._boosted(c, room.fixed_tier)
             elif room.manual_tier:
-                cur[c] = min(self.tier_overrides.get(c, 1), self.max_tier)
+                cur[c] = self._boosted(c, min(self.tier_overrides.get(c, 1), self.max_tier))
             else:
-                cur[c] = 1
+                cur[c] = self._boosted(c, 1)
         for _ in range(6):
             powering = self._generator_powering(cur)
             new = dict(cur)
             for c in rooms:
                 room = ROOMS[self.effective_room_id(c)]
                 if room.fixed_tier is None and not room.manual_tier:
-                    new[c] = self._compute_tier(c, room, cur, powering)
+                    new[c] = self._boosted(c, self._compute_tier(c, room, cur, powering))
             if new == cur:
                 break
             cur = new

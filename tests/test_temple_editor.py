@@ -178,6 +178,27 @@ def test_transcendent_progress_persists_across_sessions(tmp_path, monkeypatch):
     assert w2.transcendent_check.isChecked()
 
 
+def test_medallion_brush_boosts_a_room_to_tier_4():
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import QApplication
+
+    from aldur_appraiser.temple.editor import MEDALLION
+
+    _app = QApplication.instance() or QApplication([])
+    w = build_editor()
+    w.transcendent_check.setChecked(True)       # allow tier 4
+    w.temple.place((4, 4), "armoury")           # build the Armoury at T3 ...
+    w.temple.place((5, 4), "smithy")            # ... via Smithy AND Alchemy Lab
+    w.temple.place((3, 4), "alchemy_lab")
+    assert w.temple.room_tier((4, 4)) == 3
+    w.brush = MEDALLION
+    w._on_cell((4, 4), int(Qt.LeftButton.value))
+    assert (4, 4) in w.temple.medallion_boosts
+    assert w.temple.room_tier((4, 4)) == 4       # +1 from the medallion
+    w._on_cell((4, 4), int(Qt.LeftButton.value))  # clicking again toggles it off
+    assert (4, 4) not in w.temple.medallion_boosts
+
+
 def test_cellname_is_one_indexed_col_row():
     from aldur_appraiser.temple.editor import cellname
 
