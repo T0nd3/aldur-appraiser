@@ -169,6 +169,17 @@ def cmd_capture_test(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_temple(args: argparse.Namespace) -> int:
+    try:
+        import PySide6  # noqa: F401
+    except ImportError:
+        print('temple planner needs PySide6 (pip install -e ".[overlay]")', file=sys.stderr)
+        return 1
+    from aldur_appraiser.temple.editor import run_editor
+
+    return run_editor()
+
+
 def cmd_table(args: argparse.Namespace) -> int:
     cached, base = _load_prices(args)
     rows = sorted(cached.table.items(), key=lambda kv: kv[1], reverse=True)
@@ -235,6 +246,10 @@ def build_parser() -> argparse.ArgumentParser:
     pt = sub.add_parser("table", help="dump the price table")
     pt.add_argument("--top", type=int, default=0, help="show only top N by value")
     pt.set_defaults(func=cmd_table)
+
+    sub.add_parser("temple", help="open the Vaal Temple planner (interactive editor)").set_defaults(
+        func=cmd_temple
+    )
     return p
 
 
