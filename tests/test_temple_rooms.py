@@ -2,7 +2,13 @@
 
 from __future__ import annotations
 
-from aldur_appraiser.temple.rooms import ROOMS, UpgradeRule, validate
+from aldur_appraiser.temple.rooms import ROOMS, UpgradeRule, is_volatile, validate
+
+
+def test_treasure_vault_and_architect_rooms_are_volatile():
+    assert is_volatile(ROOMS["treasure_vault"])          # destabilises once opened
+    assert is_volatile(ROOMS["currency_vault"])          # architect reward room
+    assert not is_volatile(ROOMS["garrison"])            # a normal, persistent room
 
 
 def test_dataset_is_internally_consistent():

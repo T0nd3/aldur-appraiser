@@ -32,8 +32,10 @@ minimising rooms lost to destabilisation.
   ALWAYS destabilises when accessible. So building a **redundant path / loop**
   around a valuable room makes it non-restricted → it survives. Modelled in the
   engine (`restricted_room_cells`) and discounted in the advisor score.
-  (The Architect special reward rooms also destabilise after completion — a
-  separate `architect_room` flag.)
+  (Separately, some rooms are **volatile** — they self-destabilise once opened/
+  completed: the Treasure Vault and the Architect reward rooms. `is_volatile()`
+  flags them; the editor marks them magenta and counts them as "One-use". They
+  give a one-time reward but won't persist in a re-runnable temple.)
 - **Objective:** maximise high-tier valuable rooms (the upgrade graph) AND keep
   them non-restricted (so they aren't force-destabilised); plus avoid fighting
   the Architect/Atziri (greater destabilisation) and the random 2–3 tiles.

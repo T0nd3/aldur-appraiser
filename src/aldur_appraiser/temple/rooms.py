@@ -49,6 +49,7 @@ class Room:
     generator: bool = False              # powers nearby rooms; must connect to a road
     fixed_tier: int | None = None        # rooms that can't be upgraded (e.g. Vault)
     architect_room: bool = False         # unlocked via Architect; destabilises on complete
+    volatile: bool = False               # destabilises (is consumed) once opened/completed
     upgraded_by: tuple[UpgradeRule, ...] = ()
     cannot_connect: tuple[str, ...] = ()
     converts: tuple[str, ...] = ()       # "<from>-><to>" conversions this room triggers
@@ -58,6 +59,13 @@ class Room:
 
 def _u(source: str, counts: dict[int, int] | None = None) -> UpgradeRule:
     return UpgradeRule(source, counts or dict(_DEFAULT_COUNTS))
+
+
+def is_volatile(room: "Room") -> bool:
+    """True if the room is consumed/destabilised once completed (Treasure Vault,
+    Architect reward rooms) — placing it gives a one-time reward but it won't
+    persist, so it's a poor pick for a lasting, re-runnable temple."""
+    return room.volatile or room.architect_room
 
 
 ROOMS: dict[str, Room] = {
@@ -175,7 +183,12 @@ ROOMS: dict[str, Room] = {
         id="treasure_vault", name="Treasure Vault", category="ritual",
         bonus="25% increased Rarity of Items Dropped by Monsters",
         fixed_tier=1,
+        volatile=True,
         aka=("Sealed Vault",),
+        notes=(
+            "Contains valuable Chests based on surrounding rooms.",
+            "Room destabilises once the central Vault is opened — one-use.",
+        ),
     ),
     # --- utility -------------------------------------------------------------
     "spymaster": Room(

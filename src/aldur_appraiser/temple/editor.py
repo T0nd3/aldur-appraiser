@@ -9,7 +9,7 @@ testable headlessly. Launched via `appraiser temple`.
 from __future__ import annotations
 
 from aldur_appraiser.temple.engine import GEN_RADIUS, Temple, manhattan
-from aldur_appraiser.temple.rooms import ROOMS
+from aldur_appraiser.temple.rooms import ROOMS, is_volatile
 
 CATEGORY_COLOR = {
     "barrack": "#3b6ea5",
@@ -140,9 +140,12 @@ def build_editor():
                         p.setFont(self._font)
                         tier = self._tiers.get(c, 1)
                         p.drawText(r, Qt.AlignCenter, f"{abbrev(rid)}\n{'I' * tier}")
+                    if rid and rid != "path" and is_volatile(ROOMS[rid]):
+                        p.setPen(QColor("#d04ad0"))  # one-use: consumed on completion
+                        p.drawRect(r.adjusted(3, 3, -3, -3))
                     if c in self._restricted:  # always destabilises on exit
                         p.setPen(QColor("#e08a2a"))
-                        p.drawRect(r.adjusted(3, 3, -3, -3))
+                        p.drawRect(r.adjusted(6, 6, -6, -6))
                     if c in self._highlights:
                         p.setPen(QColor("#ffd24a"))
                         p.drawRect(r.adjusted(2, 2, -2, -2))
@@ -255,9 +258,13 @@ def build_editor():
             t3 = sum(1 for v in tiers.values() if v == 3)
             viol = len(self.temple.connection_violations())
             restricted = len(self.temple.restricted_room_cells())
+            volatile = sum(
+                1 for c in self.temple.room_cells() if is_volatile(ROOMS[self.temple.cells[c]])
+            )
             self.status.setText(
                 f"Rooms: {len(tiers)}   Tier 3: {t3}   "
-                f"Restricted (lost on exit): {restricted}   Violations: {viol}"
+                f"Restricted (lost on exit): {restricted}   "
+                f"One-use: {volatile}   Violations: {viol}"
             )
 
     return TempleEditor()
