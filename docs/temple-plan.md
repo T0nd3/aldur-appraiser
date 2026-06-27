@@ -28,8 +28,11 @@ minimising rooms lost to destabilisation.
   Defeating Architect/Atziri → greater destabilisation.
 - The game's **"Restricted Rooms"** are the **Architect reward Vaults** (placed
   via Xipocado's Console after the Architect). They — and the Treasure Vault —
-  are **volatile**: self-destabilise once used (`is_volatile()`; editor marks them
-  magenta / "One-use"). One-time reward, won't persist.
+  are **volatile**: a Vault is placed for its bonus but only **opening** it
+  triggers destabilisation (it also hits the snake's loose ends). The efficient
+  community layouts use almost no Vaults, so the practical rule is **avoid Vaults**
+  — modelled by the volatile discount + presets that never weight Vaults up.
+  (`is_volatile()`; editor marks them magenta / "One-use".)
 - **Snake building (key):** destabilisation only deletes rooms whose removal
   orphans nothing — the **loose ends** (`removable_room_cells`). A single chain
   ("snake") from the entrance has exactly ONE end (its tail), so only that one

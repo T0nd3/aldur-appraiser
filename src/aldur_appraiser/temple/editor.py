@@ -23,20 +23,20 @@ CATEGORY_COLOR = {
 ERASE = "— erase —"  # sentinel palette entry
 
 # Goal presets -> per-room advisor weights. The user picks one instead of tuning
-# individual rooms; missing rooms default to weight 1.0.
+# individual rooms; missing rooms default to weight 1.0. NB: Vaults are NOT
+# weighted up — they're one-use (destabilise when opened) and the efficient
+# community layouts avoid them, so the volatile discount keeps them low-ranked.
 PRESETS: dict[str, dict[str, float]] = {
     "Balanced (all equal)": {},
     "Currency & Rarity": {
-        "alchemy_lab": 3.0, "smithy": 2.0, "currency_vault": 3.0, "treasure_vault": 2.0,
+        "alchemy_lab": 3.0, "smithy": 2.0, "spymaster": 1.5,  # spymaster boosts Alchemy
     },
-    "Experience": {"synthflesh_lab": 3.0},
+    "Experience": {"synthflesh_lab": 3.0, "flesh_surgeon": 1.5},
     "Crafting & Corruption": {
         "corruption_chamber": 3.0, "sacrificial_chamber": 2.0, "thaumaturge": 2.0,
-        "tablets_vault": 2.0, "uniques_vault": 2.0,
     },
     "Monster Quantity & Effectiveness": {
-        "garrison": 2.0, "commander": 2.0, "armoury": 2.0,
-        "legion_barracks": 2.0, "transcendent_barracks": 2.0,
+        "garrison": 2.0, "commander": 2.0, "armoury": 2.0, "golem_works": 2.0,
     },
 }
 
