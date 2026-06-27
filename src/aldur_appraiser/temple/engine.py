@@ -21,7 +21,7 @@ from __future__ import annotations
 from collections import deque
 from dataclasses import dataclass, field
 
-from aldur_appraiser.temple.rooms import ROOMS
+from aldur_appraiser.temple.rooms import MAX_NEIGHBOR_RULES, ROOMS
 
 GRID_SIZE = 9
 ENTRANCE = (4, 8)  # bottom-centre; the build grows up from here (VERIFY orientation)
@@ -105,6 +105,23 @@ class Temple:
     def remove(self, c: Cell) -> None:
         self.cells.pop(c, None)
         self.tier_overrides.pop(c, None)
+
+    def connection_blocked(self, placing_id: str, neighbor_cell: Cell) -> bool:
+        """True if a newly-placed `placing_id` may NOT connect to the room at
+        `neighbor_cell` because a maxNeighborCount cap is already full (e.g. that
+        Armoury already has its single allowed Alchemy Lab). Ported from the
+        Tetriszocker editor's ILLEGAL_PLACEMENT_RULES."""
+        target_id = self.cells.get(neighbor_cell)
+        if target_id is None:
+            return False
+        for placing, target, limited, mx in MAX_NEIGHBOR_RULES:
+            if placing == placing_id and target == target_id:
+                count = sum(
+                    1 for nn in self.neighbors4(neighbor_cell) if self.cells.get(nn) == limited
+                )
+                if count >= mx:
+                    return True
+        return False
 
     def is_path(self, c: Cell) -> bool:
         return self.cells.get(c) == "path"

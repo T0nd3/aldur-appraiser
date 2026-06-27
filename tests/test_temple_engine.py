@@ -157,6 +157,16 @@ def test_max_tier_caps_rooms_and_transcendent_raises_it():
     assert t.room_tier((4, 4)) == 4
 
 
+def test_connection_blocked_caps_alchemy_per_armoury():
+    t = _temple()
+    t.place((4, 4), "armoury")
+    assert t.connection_blocked("alchemy_lab", (4, 4)) is False   # no alchemy yet
+    t.place((5, 4), "alchemy_lab")                                # armoury's one alchemy
+    assert t.connection_blocked("alchemy_lab", (4, 4)) is True    # cap reached
+    # the rule is specific: a Smithy may still connect to that Armoury
+    assert t.connection_blocked("smithy", (4, 4)) is False
+
+
 def test_max_tier_survives_dict_roundtrip():
     t = _temple()
     t.max_tier = 4

@@ -113,6 +113,26 @@ def can_connect(a: str, b: str) -> bool:
     return b in ALLOWED_NEIGHBORS.get(a, ()) or a in ALLOWED_NEIGHBORS.get(b, ())
 
 
+# Per-pair placement caps, ported from the Tetriszocker editor's
+# ILLEGAL_PLACEMENT_RULES (type 'maxNeighborCount'). Each tuple is
+# (placing, target, limited, max): when placing `placing` next to a `target`
+# room, that target may already have at most `max` neighbours of type `limited`
+# — otherwise the connection to it is BLOCKED. If a placement's only possible
+# connection is blocked, it's illegal. This is what stops a 2nd Alchemy Lab from
+# attaching to an Armoury that already has one (keeps the snake clean).
+MAX_NEIGHBOR_RULES: tuple[tuple[str, str, str, int], ...] = (
+    ("thaumaturge", "corruption_chamber", "thaumaturge", 1),
+    ("armoury", "garrison", "armoury", 1),
+    ("armoury", "garrison", "synthflesh_lab", 1),
+    ("spymaster", "garrison", "spymaster", 1),
+    ("spymaster", "garrison", "commander", 1),
+    ("commander", "garrison", "spymaster", 1),
+    ("alchemy_lab", "armoury", "alchemy_lab", 1),
+    ("synthflesh_lab", "garrison", "synthflesh_lab", 1),
+    ("synthflesh_lab", "garrison", "armoury", 1),
+)
+
+
 def is_volatile(room: Room) -> bool:
     """True if the room is consumed/destabilised once completed (Treasure Vault,
     Architect reward rooms) — placing it gives a one-time reward but it won't

@@ -95,7 +95,11 @@ def legal_cells(temple: Temple, room_id: str) -> list[Cell]:
             else:
                 connects = any(
                     n == temple.entrance
-                    or (n in accessible and can_connect(room_id, temple.effective_room_id(n)))
+                    or (
+                        n in accessible
+                        and can_connect(room_id, temple.effective_room_id(n))
+                        and not temple.connection_blocked(room_id, n)
+                    )
                     for n in temple.neighbors4(c)
                 )
             if connects:

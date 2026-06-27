@@ -74,6 +74,19 @@ def test_orphan_rooms_may_be_placed_anywhere():
     assert (5, 5) not in set(legal_cells(t, "armoury"))
 
 
+def test_alchemy_lab_blocked_when_armoury_already_has_one():
+    # An Armoury may have at most one Alchemy Lab neighbour (maxNeighborCount). A
+    # second Alchemy Lab whose only connection would be that Armoury is illegal.
+    t = _temple(entrance=(0, 0))
+    t.place((1, 0), "path")
+    t.place((2, 0), "path")
+    t.place((2, 1), "armoury")              # connected to the entrance via the road
+    # control: with no Alchemy Lab yet, a cell touching only the Armoury is legal
+    assert (2, 2) in set(legal_cells(t, "alchemy_lab"))
+    t.place((3, 1), "alchemy_lab")          # the Armoury's one allowed Alchemy Lab
+    assert (2, 2) not in set(legal_cells(t, "alchemy_lab"))  # the 2nd is blocked
+
+
 def test_path_must_attach_to_the_road_not_a_room():
     # The road grows from the entrance: a Path may only sit beside the entrance or
     # another Path, never floating next to a room.
