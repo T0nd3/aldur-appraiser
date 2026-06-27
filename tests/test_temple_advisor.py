@@ -63,6 +63,17 @@ def test_placement_must_reach_the_entrance():
     assert (1, 0) in cells and (0, 1) in cells  # only the entrance-rooted cells
 
 
+def test_orphan_rooms_may_be_placed_anywhere():
+    # Architect-console rooms (Vaults, Royal Access, …) may sit disconnected, so
+    # the advisor can put them on a far cell that touches nothing.
+    t = _temple(entrance=(0, 0))
+    t.place((0, 0), "garrison")            # the only connected room
+    legal = set(legal_cells(t, "currency_vault"))
+    assert (5, 5) in legal                 # nowhere near the network -> still legal
+    # a normal room cannot go there
+    assert (5, 5) not in set(legal_cells(t, "armoury"))
+
+
 def test_path_must_attach_to_the_road_not_a_room():
     # The road grows from the entrance: a Path may only sit beside the entrance or
     # another Path, never floating next to a room.

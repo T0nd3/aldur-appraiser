@@ -17,7 +17,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from aldur_appraiser.temple.engine import Cell, Temple
-from aldur_appraiser.temple.rooms import ROOMS, can_connect, is_volatile
+from aldur_appraiser.temple.rooms import ROOMS, can_connect, can_orphan, is_volatile
 
 VIOLATION_PENALTY = 5.0
 # A "removable" room is a loose end (its removal orphans nothing), so it's what
@@ -72,16 +72,19 @@ def legal_cells(temple: Temple, room_id: str) -> list[Cell]:
       an accessible Path (rooms auto-connect to adjacent paths), or next to an
       accessible room the in-game whitelist lets it connect to (`rooms.can_connect`).
 
-    On an empty grid only entrance-adjacent cells are legal."""
+    On an empty grid only entrance-adjacent cells are legal. Architect-console
+    rooms (`rooms.can_orphan`: Vaults, Royal Access, …) are exempt — they may sit
+    anywhere, connected or not."""
     out: list[Cell] = []
     is_path = room_id == "path"
+    orphan_ok = room_id in ROOMS and can_orphan(ROOMS[room_id])
     accessible = temple.accessible_cells()  # cells reachable from the entrance
     for x in range(temple.size):
         for y in range(temple.size):
             c = (x, y)
             if c in temple.cells or c in temple.blocked:
                 continue
-            if c == temple.entrance:
+            if orphan_ok or c == temple.entrance:
                 out.append(c)
                 continue
             if is_path:

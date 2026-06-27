@@ -9,7 +9,7 @@ testable headlessly. Launched via `appraiser temple`.
 from __future__ import annotations
 
 from aldur_appraiser.temple.engine import Temple
-from aldur_appraiser.temple.rooms import ROOMS, is_volatile
+from aldur_appraiser.temple.rooms import ROOMS, can_orphan, is_volatile
 
 CATEGORY_COLOR = {
     "barrack": "#3b6ea5",
@@ -52,6 +52,17 @@ def abbrev(room_id: str) -> str:
 def cellname(c: tuple[int, int]) -> str:
     """Human grid reference matching the 1-9 edge labels (column, row)."""
     return f"col {c[0] + 1}, row {c[1] + 1}"
+
+
+def disconnected_rooms(temple) -> set[tuple[int, int]]:
+    """Placed rooms stranded from the entrance — excluding Architect-console rooms
+    (Vaults, Royal Access, …) which may legally exist as orphans."""
+    accessible = temple.accessible_room_cells()
+    return {
+        c
+        for c in temple.room_cells()
+        if c not in accessible and not can_orphan(ROOMS[temple.cells[c]])
+    }
 
 
 def layout_path():
@@ -160,9 +171,9 @@ def build_editor():
                 c for pair in self.temple.connection_violations() for c in pair
             }
             self._removable = self.temple.removable_room_cells()
-            # rooms not reachable from the entrance: the game never strands them,
-            # so these need a Path/road drawn to count as part of the temple.
-            self._disconnected = set(self.temple.room_cells()) - self.temple.accessible_room_cells()
+            # rooms not reachable from the entrance: normal ones need a Path/road
+            # drawn (Vaults/Royal Access/Architect may legally stay orphans).
+            self._disconnected = disconnected_rooms(self.temple)
             self.update()
 
         def _cell_at(self, x: int, y: int) -> tuple[int, int] | None:
@@ -457,9 +468,7 @@ def build_editor():
             volatile = sum(
                 1 for c in self.temple.room_cells() if is_volatile(ROOMS[self.temple.cells[c]])
             )
-            disconnected = len(
-                set(self.temple.room_cells()) - self.temple.accessible_room_cells()
-            )
+            disconnected = len(disconnected_rooms(self.temple))
             self.status.setText(
                 f"Rooms: {len(tiers)}   Tier 3: {t3}   "
                 f"Loose ends (deletable): {removable}   "

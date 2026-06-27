@@ -140,8 +140,9 @@ def test_editor_marks_rooms_disconnected_from_entrance():
     w = build_editor()                              # entrance defaults to (4, 8)
     w.temple.place((4, 7), "garrison")              # adjacent to the entrance -> connected
     w.temple.place((0, 0), "armoury")               # far corner -> stranded
+    w.temple.place((8, 0), "currency_vault")        # a vault may legally be an orphan
     w._refresh()
-    assert w.grid._disconnected == {(0, 0)}
+    assert w.grid._disconnected == {(0, 0)}         # the vault is NOT flagged
     assert (4, 7) not in w.grid._disconnected
     assert "Disconnected: 1" in w.status.text()
 

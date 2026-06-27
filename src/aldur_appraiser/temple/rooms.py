@@ -120,6 +120,14 @@ def is_volatile(room: Room) -> bool:
     return room.volatile or room.architect_room
 
 
+def can_orphan(room: Room) -> bool:
+    """True for the Architect-console rooms (the Vaults, Royal Access, Extraction
+    and the Architect's Chamber itself). Unlike normal rooms — which must join the
+    road network from the entrance — these may legally sit disconnected (orphans),
+    so they shouldn't be flagged as stranded or forced to connect."""
+    return room.category == "special"
+
+
 ROOMS: dict[str, Room] = {
     # --- barracks line -------------------------------------------------------
     "garrison": Room(
