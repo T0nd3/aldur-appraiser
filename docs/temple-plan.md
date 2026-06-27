@@ -140,3 +140,49 @@ Remaining / future work:
 - **Phase 4 (optional) — live overlay:** read the temple grid + drawn cards via
   vision and suggest in-game. Hard/fragile; only if the offline planner proves
   useful first.
+
+## Phase 5 plan — auto-detect hand cards & medallions (vision)
+
+Goal: a "Detect from screen" button in the temple editor that fills the **hand**
+(and later **medallions**) by reading the live PoE2 Temple Console, reusing the
+pricing stack (`vision/capture.py` + `ocr.py`). Read-only: screen capture + OCR
+only, no input/memory access.
+
+### 5a — Hand cards (text OCR) — primary, feasible
+The left "Room Cards" list shows card **names** as text (e.g. "Spymaster's
+Study", "Path", "Chamber of Souls"). Pipeline:
+1. Capture the frame (existing backend).
+2. Locate the "Room Cards" panel ROI. Anchor by template-matching the
+   "Room Cards" header (like the Runeshape header), then take a fixed band below
+   it; ~6 card rows.
+3. OCR each row's name text.
+4. Fuzzy-match (rapidfuzz, same as pricing) against room `name` + `aka`
+   (in-game card names differ from our ids — Bronzeworks=Smithy, Chamber of
+   Souls=Alchemy Lab, Dynamo=Generator, Guardhouse=Garrison, Surgeon's Ward=
+   Flesh Surgeon, …). Build a `CARD_NAME -> room_id` table from `aka`.
+5. Populate `self.hand` + `hand_list`.
+Risks: OCR on stylised gold-on-dark font; card names wrap/scroll. Mitigate with
+the proven `fuzz.ratio` matcher and a name/aka lookup.
+
+### 5b — Medallions (icon match) — secondary, harder
+The right "Medallions (n/6)" panel shows **icons**, not text. Options:
+- Template-match each medallion icon (needs one clean crop per medallion type),
+  or
+- (worse) OCR the hover tooltip — needs synthetic hover, out of scope (read-only).
+Medallions map to rooms via their "May drop … Medallion" lines already noted on
+rooms. Defer until 5a works.
+
+### Integration
+- New module `temple/vision.py`: `detect_hand(frame) -> list[room_id]`,
+  `detect_medallions(frame) -> list[room_id]`.
+- Editor: "Detect from screen" button → capture → detect → set hand/medallions
+  (replace or append; ask). Headless-safe (button only active with capture).
+
+### Assets needed from the player (at native resolution)
+- A full screenshot of the Temple Console with the Room Cards list populated.
+- A crop of the "Room Cards" header (ROI anchor template).
+- Later: one clean crop of each medallion icon seen so far.
+
+### Effort
+- 5a: medium (ROI calibration + name/aka table + tests on a fixture screenshot).
+- 5b: medium-high and fragile (per-icon templates). Optional.
