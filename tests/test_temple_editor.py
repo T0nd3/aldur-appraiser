@@ -52,6 +52,21 @@ def test_editor_advisor_highlights_best_cell():
     assert w.grid._highlights == {(4, 4)}
 
 
+def test_editor_priority_weight_feeds_the_advisor():
+    from PySide6.QtWidgets import QApplication
+
+    _app = QApplication.instance() or QApplication([])
+    w = build_editor()
+    w.temple.place((4, 8), "garrison")          # anchor
+    w.hand = ["garrison", "alchemy_lab"]
+    # set the Alchemy Lab's priority to 5 via the spinbox
+    w.brush = "alchemy_lab"
+    w.weight_spin.setValue(5.0)
+    assert w.weights == {"alchemy_lab": 5.0}
+    w._suggest()
+    assert "Alchemy Lab" in w.suggestions.text().splitlines()[1]
+
+
 def test_editor_applies_tier_override_to_manual_room():
     from PySide6.QtCore import Qt
     from PySide6.QtWidgets import QApplication

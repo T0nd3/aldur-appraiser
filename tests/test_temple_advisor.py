@@ -73,6 +73,15 @@ def test_suggest_flags_one_use_rooms():
     assert "one-use" in best.note
 
 
+def test_weights_steer_the_recommendation():
+    t = _temple(entrance=(4, 8))
+    t.place((4, 7), "garrison")            # anchor so placements are legal
+    hand = ["garrison", "alchemy_lab"]
+    # the player says "I want Alchemy Labs" -> it should top the ranking
+    best = suggest(t, hand, values={"alchemy_lab": 5.0}, top=1)[0]
+    assert best.card == "alchemy_lab"
+
+
 def test_plan_hand_consumes_cards_and_improves_score():
     t = _temple(entrance=(4, 8))
     t.place((4, 7), "commander")

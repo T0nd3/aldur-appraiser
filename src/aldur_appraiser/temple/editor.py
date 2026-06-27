@@ -37,6 +37,7 @@ def build_editor():
     from PySide6.QtGui import QColor, QFont, QPainter
     from PySide6.QtWidgets import (
         QComboBox,
+        QDoubleSpinBox,
         QHBoxLayout,
         QLabel,
         QListWidget,
@@ -171,6 +172,16 @@ def build_editor():
             self.palette.setCurrentRow(1 + list(ROOMS).index("garrison"))
             self.palette.currentRowChanged.connect(self._on_brush)
 
+            # per-room priority (weight) the advisor optimises for; default 1.0
+            self.weights: dict[str, float] = {}
+            self.weight_spin = QDoubleSpinBox()
+            self.weight_spin.setRange(0.0, 10.0)
+            self.weight_spin.setSingleStep(0.5)
+            self.weight_spin.setValue(1.0)
+            self.weight_spin.valueChanged.connect(self._on_weight)
+            self.priorities = QLabel("Priorities: (all 1.0)")
+            self.priorities.setWordWrap(True)
+
             clear = QPushButton("Clear grid")
             clear.clicked.connect(self._clear)
             # tier picker for rooms upgraded by a player action (sacrifice/assassinate)
@@ -194,6 +205,9 @@ def build_editor():
             left = QVBoxLayout()
             left.addWidget(QLabel("Room (left-click place · right-click erase)"))
             left.addWidget(self.palette, 1)
+            left.addWidget(QLabel("Priority of the selected room (what you want)"))
+            left.addWidget(self.weight_spin)
+            left.addWidget(self.priorities)
             left.addWidget(QLabel("Tier for sacrifice/assassinate rooms"))
             left.addWidget(self.tier_select)
             left.addWidget(clear)
@@ -229,7 +243,7 @@ def build_editor():
             if not self.hand:
                 self.suggestions.setText("Hand is empty — add the cards you drew.")
                 return
-            ranked = suggest(self.temple, self.hand, top=5)
+            ranked = suggest(self.temple, self.hand, values=self.weights, top=5)
             if not ranked:
                 self.suggestions.setText("No legal placement found.")
                 self.grid.set_highlights(())
@@ -243,6 +257,22 @@ def build_editor():
                 self.brush = ERASE
             else:
                 self.brush = list(ROOMS)[idx - 1]
+                # show the selected room's current priority in the spinbox
+                self.weight_spin.blockSignals(True)
+                self.weight_spin.setValue(self.weights.get(self.brush, 1.0))
+                self.weight_spin.blockSignals(False)
+
+        def _on_weight(self, value: float) -> None:
+            if self.brush == ERASE:
+                return
+            if value == 1.0:
+                self.weights.pop(self.brush, None)
+            else:
+                self.weights[self.brush] = value
+            shown = ", ".join(
+                f"{ROOMS[r].name} {w:g}" for r, w in sorted(self.weights.items())
+            )
+            self.priorities.setText(f"Priorities: {shown or '(all 1.0)'}")
 
         def _on_cell(self, cell, button) -> None:
             from PySide6.QtCore import Qt
