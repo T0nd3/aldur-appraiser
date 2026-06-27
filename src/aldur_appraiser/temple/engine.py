@@ -89,7 +89,7 @@ class Temple:
     def accessible_cells(self, *, ignore: Cell | None = None) -> set[Cell]:
         """Occupied cells reachable from the entrance over 4-adjacent occupied
         cells. `ignore` removes a cell first (used to test what a removal would
-        orphan). Drives the Generator's road-connection rule and the restricted
+        orphan). Drives the Generator's road-connection rule and the chokepoint
         (articulation) check."""
         occupied = {c for c in self.cells if c != ignore}
         if not occupied:
@@ -111,21 +111,23 @@ class Temple:
         acc = self.accessible_cells()
         return {c for c in acc if self.is_room(c)}
 
-    def restricted_room_cells(self) -> set[Cell]:
-        """Restricted rooms = accessible rooms whose removal would orphan another
-        room from the entrance (articulation points). The game always destabilises
-        these on exit, so a valuable room you want to keep must NOT be one — build
-        a redundant path (a loop) around it so it stops being the sole connection.
-        (You can't *place* an orphan; this is about what a later removal strands.)"""
+    def chokepoint_room_cells(self) -> set[Cell]:
+        """Chokepoint rooms = accessible rooms that are the SOLE connection to some
+        room behind them (articulation points): if one is destabilised by the
+        random 2-3 per entry, everything behind it is stranded. A valuable room is
+        safer as a non-chokepoint — build a redundant path (a loop) around it.
+
+        NB: this is a layout-risk heuristic, NOT the game's "Restricted Rooms"
+        (those are the Architect reward Vaults — see is_volatile())."""
         base = self.accessible_room_cells()
         if not base:
             return set()
-        restricted: set[Cell] = set()
+        chokepoints: set[Cell] = set()
         for c in self.room_cells():
             after = {rc for rc in self.accessible_cells(ignore=c) if self.is_room(rc)}
-            if (base - {c}) - after:  # some other room lost access -> c is restricted
-                restricted.add(c)
-        return restricted
+            if (base - {c}) - after:  # some other room lost access -> c is a chokepoint
+                chokepoints.add(c)
+        return chokepoints
 
     # --- conversions ---------------------------------------------------------
 

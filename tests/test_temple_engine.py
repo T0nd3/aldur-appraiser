@@ -69,22 +69,22 @@ def test_accessibility_from_entrance():
     assert (5, 5) not in acc
 
 
-# --- restricted (articulation) rooms -----------------------------------------
+# --- chokepoint (articulation) rooms -----------------------------------------
 
 
-def test_restricted_room_detected_and_loop_clears_it():
+def test_chokepoint_room_detected_and_loop_clears_it():
     t = _temple(entrance=(0, 0))
     t.place((0, 0), "garrison")     # entrance
-    t.place((0, 1), "armoury")      # sole connector -> restricted
+    t.place((0, 1), "armoury")      # sole connector -> chokepoint
     t.place((0, 2), "commander")    # behind it (a leaf)
-    r = t.restricted_room_cells()
+    r = t.chokepoint_room_cells()
     assert (0, 1) in r
     assert (0, 2) not in r          # leaf is safe
     # add a redundant path loop around the armoury -> it's no longer the sole link
     t.place((1, 0), "path")
     t.place((1, 1), "path")
     t.place((1, 2), "path")
-    assert (0, 1) not in t.restricted_room_cells()
+    assert (0, 1) not in t.chokepoint_room_cells()
 
 
 # --- manual tier override (sacrifice / assassinate rooms) --------------------

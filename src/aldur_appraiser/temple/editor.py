@@ -55,7 +55,7 @@ def build_editor():
             self._hover: tuple[int, int] | None = None
             self._tiers: dict[tuple[int, int], int] = {}
             self._violation_cells: set[tuple[int, int]] = set()
-            self._restricted: set[tuple[int, int]] = set()
+            self._chokepoints: set[tuple[int, int]] = set()
             self._highlights: set[tuple[int, int]] = set()
             self.setMouseTracking(True)
             self.setFixedSize(self.cell * temple.size, self.cell * temple.size)
@@ -75,7 +75,7 @@ def build_editor():
             self._violation_cells = {
                 c for pair in self.temple.connection_violations() for c in pair
             }
-            self._restricted = self.temple.restricted_room_cells()
+            self._chokepoints = self.temple.chokepoint_room_cells()
             self.update()
 
         def _cell_at(self, x: int, y: int) -> tuple[int, int] | None:
@@ -144,7 +144,7 @@ def build_editor():
                     if rid and rid != "path" and is_volatile(ROOMS[rid]):
                         p.setPen(QColor("#d04ad0"))  # one-use: consumed on completion
                         p.drawRect(r.adjusted(3, 3, -3, -3))
-                    if c in self._restricted:  # always destabilises on exit
+                    if c in self._chokepoints:  # sole link -> risky if random-destabilised
                         p.setPen(QColor("#e08a2a"))
                         p.drawRect(r.adjusted(6, 6, -6, -6))
                     if c in self._highlights:
@@ -266,13 +266,13 @@ def build_editor():
             tiers = self.temple.tiers()
             t3 = sum(1 for v in tiers.values() if v == 3)
             viol = len(self.temple.connection_violations())
-            restricted = len(self.temple.restricted_room_cells())
+            chokepoints = len(self.temple.chokepoint_room_cells())
             volatile = sum(
                 1 for c in self.temple.room_cells() if is_volatile(ROOMS[self.temple.cells[c]])
             )
             self.status.setText(
                 f"Rooms: {len(tiers)}   Tier 3: {t3}   "
-                f"Restricted (lost on exit): {restricted}   "
+                f"Chokepoints: {chokepoints}   "
                 f"One-use: {volatile}   Violations: {viol}"
             )
 

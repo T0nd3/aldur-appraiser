@@ -20,10 +20,10 @@ from aldur_appraiser.temple.engine import Cell, Temple
 from aldur_appraiser.temple.rooms import ROOMS, is_volatile
 
 VIOLATION_PENALTY = 5.0
-# A restricted (articulation) room always destabilises on exit, so its value is
-# discounted — this nudges the advisor to add redundant paths that de-restrict a
-# valuable room rather than leave it as a sole connection.
-RESTRICTED_DISCOUNT = 0.6
+# A chokepoint (articulation) room is the sole link to rooms behind it, so a
+# random destabilisation there strands them — discount its value to nudge the
+# advisor toward redundant paths (loops) that protect valuable rooms.
+CHOKEPOINT_DISCOUNT = 0.6
 # A volatile room (Treasure Vault / Architect reward rooms) self-destabilises once
 # used, so it won't persist in a re-runnable temple — discounted the same way.
 VOLATILE_DISCOUNT = 0.6
@@ -42,13 +42,13 @@ class Suggestion:
 def score(temple: Temple, values: dict[str, float] | None = None) -> float:
     """A single number for the whole temple: sum of value*tier, less violations."""
     values = values or {}
-    restricted = temple.restricted_room_cells()
+    chokepoints = temple.chokepoint_room_cells()
     total = 0.0
     for c, tier in temple.tiers().items():
         rid = temple.effective_room_id(c)
         worth = values.get(rid, 1.0) * tier
-        if c in restricted:           # always destabilises on exit
-            worth *= 1.0 - RESTRICTED_DISCOUNT
+        if c in chokepoints:          # sole link -> a random destab strands rooms
+            worth *= 1.0 - CHOKEPOINT_DISCOUNT
         if is_volatile(ROOMS[rid]):   # self-destabilises once used
             worth *= 1.0 - VOLATILE_DISCOUNT
         total += worth

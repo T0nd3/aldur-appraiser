@@ -26,19 +26,19 @@ minimising rooms lost to destabilisation.
 - **Destabilisation:** each entry 2–3 random tiles destabilise (removed
   permanently on exit). **Accessible "Restricted" rooms always destabilise.**
   Defeating Architect/Atziri → greater destabilisation.
-- You **cannot place** a room that would be orphaned (placement always stays
-  connected) — but **"Restricted" IS topological** (confirmed): a room whose
-  removal would orphan rooms behind it (an articulation point) is Restricted and
-  ALWAYS destabilises when accessible. So building a **redundant path / loop**
-  around a valuable room makes it non-restricted → it survives. Modelled in the
-  engine (`restricted_room_cells`) and discounted in the advisor score.
-  (Separately, some rooms are **volatile** — they self-destabilise once opened/
-  completed: the Treasure Vault and the Architect reward rooms. `is_volatile()`
-  flags them; the editor marks them magenta and counts them as "One-use". They
-  give a one-time reward but won't persist in a re-runnable temple.)
-- **Objective:** maximise high-tier valuable rooms (the upgrade graph) AND keep
-  them non-restricted (so they aren't force-destabilised); plus avoid fighting
-  the Architect/Atziri (greater destabilisation) and the random 2–3 tiles.
+- The game's **"Restricted Rooms"** are the **Architect reward Vaults** (placed
+  via Xipocado's Console after the Architect). They — and the Treasure Vault —
+  are **volatile**: self-destabilise once used (`is_volatile()`; editor marks them
+  magenta / "One-use"). One-time reward, won't persist.
+- Separately, the engine flags **chokepoints** (`chokepoint_room_cells`):
+  articulation points that are the sole link to rooms behind them, so a random
+  2–3 destabilisation there strands those rooms. A **redundant path / loop**
+  clears a chokepoint. Editor marks them orange. (A layout heuristic, NOT the
+  game's "Restricted Rooms".)
+- Both chokepoints and volatile rooms are **discounted** in the advisor score.
+- **Objective:** maximise high-tier valuable rooms (the upgrade graph), keep them
+  off chokepoints (loops), prefer persistent over volatile, and avoid fighting
+  the Architect/Atziri (greater destabilisation) + the random 2–3 tiles.
 
 ## Data model — BUILT (`src/aldur_appraiser/temple/rooms.py`)
 - `Room` dataclass: `id, name, category, bonus, generator, fixed_tier,
@@ -81,15 +81,10 @@ minimising rooms lost to destabilisation.
    Note: high-tier ritual rooms (Thaumaturge/Sacrificial/Alchemy/Corruption) hold
    a one-use "device" that destabilises the room when used (optional).
 4. **Exact per-tier % numbers** (value display only; not needed for structure).
-5. **"Restricted Rooms" — TERMINOLOGY CONFLICT (open):** the in-game Architect's
-   Chamber says Xipocado's Console "can be used to place various Restricted Rooms"
-   — i.e. the game's "Restricted Rooms" are the **Architect special reward rooms**
-   (already our `architect_room`/`volatile`), which always destabilise. That's
-   NOT the topological articulation concept the player first described. The
-   articulation/orphan idea is still a useful strategic hint (avoid sole-path
-   valuable rooms vs random destabilisation) but is MISLABELLED as "restricted"
-   in the engine — decide whether to rename it (chokepoint / orphan-risk) and keep
-   it, and treat the architect Vaults as the real "Restricted Rooms".
+5. **"Restricted Rooms" — RESOLVED:** the in-game Architect's Chamber confirms the
+   game's "Restricted Rooms" are the Architect reward Vaults (= our `volatile`/
+   `architect_room`). The articulation concept was renamed **chokepoint**
+   (`chokepoint_room_cells`) and kept as a layout heuristic, separate from them.
 6. Which rooms count as **"valuable"** for the objective/advisor weighting
    (likely user-configurable) + the Prosthetic Research effect.
 
@@ -100,8 +95,8 @@ minimising rooms lost to destabilisation.
 - [x] **Phase 1b — Rules engine** — `temple/engine.py` (+ `tests/test_temple_engine.py`).
   9×9 grid, placement, accessibility BFS from the entrance, generator Manhattan
   power radius (needs network connection), adjacency tier computation, Garrison
-  conversions, cannot-connect violation checks, and `restricted_room_cells`
-  (articulation points = always destabilised; a redundant loop clears them).
+  conversions, cannot-connect violation checks, and `chokepoint_room_cells`
+  (articulation points = sole links; a redundant loop clears them).
   Offline, no % numbers needed.
 - [x] **Phase 2 — Interactive editor (Qt)** — `temple/editor.py` (+ headless
   smoke test `tests/test_temple_editor.py`). 9×9 painter grid, room palette
@@ -123,14 +118,14 @@ minimising rooms lost to destabilisation.
   linked through a chain of `Path` tiles / adjacent rooms.
 - **Accessibility:** BFS from the entrance (bottom-centre) over the path/room
   network; a room is accessible if reachable.
-- **Orphan/Restricted risk:** a placed room is an articulation point if removing
-  it disconnects some room from the entrance → those are the risky rooms.
+- **Chokepoint risk:** a placed room is an articulation point if removing it
+  disconnects some room from the entrance → those are the risky (sole-link) rooms.
 - **Tier:** per room, count adjacent rooms matching each `UpgradeRule.source`;
   tier = highest tier whose threshold is met (cap 3, or `fixed_tier`). Generator
   powers rooms in its Manhattan radius if connected to a path.
 - **Destab risk score:** expected loss ≈ f(random 2–3 tiles + accessible
-  restricted rooms + architect/atziri). Advisor minimises expected loss of
-  high-value rooms.
+  volatile/chokepoint rooms + architect/atziri). Advisor minimises expected loss
+  of high-value rooms.
 
 ## Key sources
 - mobalytics Vaal Temple guide (room table): <https://mobalytics.gg/poe-2/guides/vaal-temple>

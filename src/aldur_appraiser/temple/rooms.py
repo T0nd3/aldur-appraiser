@@ -9,9 +9,10 @@ Confirmed by the player:
   - Tier upgrades count ADJACENT rooms of the listed type(s) — except the
     Generator/Dynamo, which powers rooms within a Manhattan radius (and must be
     connected to a road/path).
-  - "Restricted" is topological: a room whose removal would orphan rooms behind
-    it (an articulation point on the path). Modelled in the engine, not as a
-    fixed per-room flag.
+  - The game's "Restricted Rooms" are the Architect reward Vaults (flagged
+    volatile/architect_room) — they always destabilise. A separate engine
+    heuristic, chokepoint_room_cells(), flags articulation points (sole links) as
+    a layout risk; that is NOT the game's "Restricted Rooms".
 
 Still VERIFY: the exact per-tier counts for upgraders the table doesn't spell
 out (assumed 1 adjacent -> T2, 2 -> T3) and the exact per-tier % numbers.
