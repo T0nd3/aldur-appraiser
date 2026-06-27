@@ -22,10 +22,33 @@ def test_score_rewards_higher_tiers():
 def test_legal_cells_require_network_connection():
     t = _temple(entrance=(4, 8))
     t.place((4, 7), "garrison")           # adjacent to the entrance
-    cells = set(legal_cells(t))
-    assert (4, 6) in cells                # touches the placed room
+    cells = set(legal_cells(t, "commander"))  # commander connects to a garrison
+    assert (4, 6) in cells                # touches the placed room (legal connection)
     assert (4, 8) in cells                # the entrance itself
     assert (0, 0) not in cells            # far corner, disconnected
+
+
+def test_legal_cells_respect_the_connection_whitelist():
+    # A Spymaster only connects to a Path or a Garrison — never an Alchemy Lab.
+    t = _temple(entrance=(4, 8))
+    t.place((4, 7), "alchemy_lab")        # connected to the entrance
+    cells = set(legal_cells(t, "spymaster"))
+    assert (4, 6) not in cells            # would touch only the Alchemy Lab -> illegal
+    assert (3, 7) not in cells            # likewise
+    # but a Garrison may sit next to that Alchemy Lab? no -> also illegal there,
+    # while a Path can always connect
+    assert (4, 6) in set(legal_cells(t, "path"))
+
+
+def test_spymaster_is_never_suggested_next_to_alchemy_lab():
+    # regression: the advisor used to recommend a Spymaster beside an Alchemy Lab,
+    # an impossible connection in-game.
+    t = _temple(entrance=(4, 8))
+    t.place((4, 7), "alchemy_lab")
+    sugg = suggest(t, ["spymaster"], top=5)
+    for s in sugg:
+        # every suggested spymaster cell must legally connect (path/entrance/garrison)
+        assert s.cell != (4, 6) and s.cell != (3, 7)
 
 
 def test_suggest_places_third_garrison_next_to_commander():

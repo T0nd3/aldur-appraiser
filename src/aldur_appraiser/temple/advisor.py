@@ -17,7 +17,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from aldur_appraiser.temple.engine import Cell, Temple
-from aldur_appraiser.temple.rooms import ROOMS, is_volatile
+from aldur_appraiser.temple.rooms import ROOMS, can_connect, is_volatile
 
 VIOLATION_PENALTY = 5.0
 # A "removable" room is a loose end (its removal orphans nothing), so it's what
@@ -57,20 +57,28 @@ def score(temple: Temple, values: dict[str, float] | None = None) -> float:
     return total
 
 
-def legal_cells(temple: Temple) -> list[Cell]:
-    """Empty, non-blocked cells a card may legally go on: connected to the
-    existing network (the game never allows a disconnected placement). On an
-    empty grid only cells touching the entrance qualify."""
+def legal_cells(temple: Temple, room_id: str) -> list[Cell]:
+    """Empty, non-blocked cells `room_id` may legally go on: it must form at least
+    one real connection (the game never allows a disconnected placement, and two
+    rooms only connect if the in-game whitelist permits it — see
+    `rooms.can_connect`). The entrance acts as a universal road connector, so a
+    cell on or beside it always qualifies. On an empty grid only entrance-adjacent
+    cells are legal."""
     out: list[Cell] = []
     for x in range(temple.size):
         for y in range(temple.size):
             c = (x, y)
             if c in temple.cells or c in temple.blocked:
                 continue
-            touches = c == temple.entrance or any(
-                n in temple.cells or n == temple.entrance for n in temple.neighbors4(c)
+            if c == temple.entrance:
+                out.append(c)
+                continue
+            connects = any(
+                n == temple.entrance
+                or (n in temple.cells and can_connect(room_id, temple.effective_room_id(n)))
+                for n in temple.neighbors4(c)
             )
-            if touches:
+            if connects:
                 out.append(c)
     return out
 
@@ -106,12 +114,11 @@ def suggest(temple: Temple, hand, *, values=None, top: int = 5) -> list[Suggesti
     base = score(temple, values)
     base_tiers = temple.tiers()
     work = temple.copy()
-    cells = legal_cells(work)
     out = [
         _evaluate(work, card, cell, base, base_tiers, values)
         for card in dict.fromkeys(hand)  # distinct, order-preserving
         if card in ROOMS
-        for cell in cells
+        for cell in legal_cells(work, card)  # legal cells differ per room
     ]
     out.sort(key=lambda s: s.gain, reverse=True)
     return out[:top]

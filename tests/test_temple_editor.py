@@ -12,6 +12,15 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from aldur_appraiser.temple.editor import abbrev, build_editor  # noqa: E402
 
 
+@pytest.fixture(autouse=True)
+def _isolated_layout(tmp_path, monkeypatch):
+    """Point persistence at a throwaway file so a real saved layout in the user's
+    config dir can't leak into (and break) these tests."""
+    import aldur_appraiser.temple.editor as ed
+
+    monkeypatch.setattr(ed, "layout_path", lambda: tmp_path / "layout.json")
+
+
 def test_editor_builds_and_reflects_engine_state():
     from PySide6.QtWidgets import QApplication
 
@@ -73,8 +82,9 @@ def test_cellname_is_one_indexed_col_row():
 
 
 def test_layout_persists_across_editor_sessions(tmp_path, monkeypatch):
-    import aldur_appraiser.temple.editor as ed
     from PySide6.QtWidgets import QApplication
+
+    import aldur_appraiser.temple.editor as ed
 
     monkeypatch.setattr(ed, "layout_path", lambda: tmp_path / "layout.json")
     _app = QApplication.instance() or QApplication([])

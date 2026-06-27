@@ -71,6 +71,48 @@ class Room:
     notes: tuple[str, ...] = ()
 
 
+_BARRACKS = ("garrison", "legion_barracks", "transcendent_barracks")
+
+# Which rooms may form a CONNECTION when adjacent (the in-game whitelist, ported
+# from the Tetriszocker editor's allowedNeighborMap). Rooms not listed for each
+# other can still sit side by side but won't connect — and a placed room needs at
+# least one connection, so e.g. a Spymaster can only go next to a Path or a
+# Garrison, never an Alchemy Lab.
+ALLOWED_NEIGHBORS: dict[str, set[str]] = {
+    "path": {"path"},
+    "garrison": {"path", "commander", "armoury", "synthflesh_lab", "spymaster"},
+    "legion_barracks": {"path", "commander", "armoury", "synthflesh_lab", "spymaster"},
+    "transcendent_barracks": {"path", "commander", "armoury", "synthflesh_lab", "spymaster"},
+    "commander": {"path", *_BARRACKS},
+    "armoury": {"path", "smithy", "alchemy_lab", *_BARRACKS},
+    "smithy": {"path", "golem_works", "armoury"},
+    "golem_works": {"path", "smithy"},
+    "generator": {"path"},
+    "spymaster": {"path", *_BARRACKS},
+    "synthflesh_lab": {"path", "flesh_surgeon", *_BARRACKS},
+    "flesh_surgeon": {"path", "synthflesh_lab"},
+    "alchemy_lab": {"path", "thaumaturge", "armoury"},
+    "thaumaturge": {"path", "sacrificial_chamber", "alchemy_lab", "corruption_chamber"},
+    "corruption_chamber": {"path", "sacrificial_chamber", "thaumaturge"},
+    "sacrificial_chamber": {"path", "generator", "corruption_chamber", "thaumaturge"},
+    "treasure_vault": {"path"},
+    # special / architect rooms connect via path only
+    "architect_chamber": {"path"},
+    "royal_access_chamber": {"path"},
+    "extraction_chamber": {"path"},
+    "augments_vault": {"path"},
+    "currency_vault": {"path"},
+    "lineage_gems_vault": {"path"},
+    "tablets_vault": {"path"},
+    "uniques_vault": {"path"},
+}
+
+
+def can_connect(a: str, b: str) -> bool:
+    """Symmetric: may rooms `a` and `b` form a connection when placed adjacent?"""
+    return b in ALLOWED_NEIGHBORS.get(a, ()) or a in ALLOWED_NEIGHBORS.get(b, ())
+
+
 def is_volatile(room: Room) -> bool:
     """True if the room is consumed/destabilised once completed (Treasure Vault,
     Architect reward rooms) — placing it gives a one-time reward but it won't
