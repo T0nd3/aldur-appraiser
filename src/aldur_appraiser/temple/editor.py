@@ -101,7 +101,7 @@ def load_layout() -> tuple[Temple | None, str, list[str]]:
 def build_editor():
     """Construct the editor widget (imports PySide6 lazily). Returns the widget."""
     from PySide6.QtCore import QRectF, Qt, Signal
-    from PySide6.QtGui import QColor, QFont, QPainter
+    from PySide6.QtGui import QColor, QFont, QPainter, QPen
     from PySide6.QtWidgets import (
         QComboBox,
         QHBoxLayout,
@@ -124,6 +124,7 @@ def build_editor():
             self._tiers: dict[tuple[int, int], int] = {}
             self._violation_cells: set[tuple[int, int]] = set()
             self._removable: set[tuple[int, int]] = set()
+            self._disconnected: set[tuple[int, int]] = set()
             # cell -> rank (0 = best). Equal-value cells share a rank/colour;
             # weaker ones get a higher rank and a dimmer shade.
             self._highlights: dict[tuple[int, int], int] = {}
@@ -159,6 +160,9 @@ def build_editor():
                 c for pair in self.temple.connection_violations() for c in pair
             }
             self._removable = self.temple.removable_room_cells()
+            # rooms not reachable from the entrance: the game never strands them,
+            # so these need a Path/road drawn to count as part of the temple.
+            self._disconnected = set(self.temple.room_cells()) - self.temple.accessible_room_cells()
             self.update()
 
         def _cell_at(self, x: int, y: int) -> tuple[int, int] | None:
@@ -218,6 +222,8 @@ def build_editor():
                         p.fillRect(r, QColor(150, 205, 255, 60))
                     if c == self.temple.entrance:
                         p.fillRect(r, QColor(124, 252, 138, 50))
+                    if c in self._disconnected:  # not reachable from the entrance
+                        p.fillRect(r, QColor(0, 0, 0, 110))  # dim it out
                     # border (red if a cannot-connect violation)
                     bad = c in self._violation_cells
                     p.setPen(QColor("#d04a4a") if bad else QColor(20, 18, 14))
@@ -230,6 +236,9 @@ def build_editor():
                     if rid and rid != "path" and is_volatile(ROOMS[rid]):
                         p.setPen(QColor("#d04ad0"))  # one-use: consumed on completion
                         p.drawRect(r.adjusted(3, 3, -3, -3))
+                    if c in self._disconnected:  # dashed cyan = needs a road to connect
+                        p.setPen(QPen(QColor("#5fd0e0"), 1, Qt.DashLine))
+                        p.drawRect(r.adjusted(2, 2, -2, -2))
                     if c in self._removable:  # loose end -> destabilisation can delete it
                         p.setPen(QColor("#e08a2a"))
                         p.drawRect(r.adjusted(6, 6, -6, -6))
@@ -448,10 +457,13 @@ def build_editor():
             volatile = sum(
                 1 for c in self.temple.room_cells() if is_volatile(ROOMS[self.temple.cells[c]])
             )
+            disconnected = len(
+                set(self.temple.room_cells()) - self.temple.accessible_room_cells()
+            )
             self.status.setText(
                 f"Rooms: {len(tiers)}   Tier 3: {t3}   "
                 f"Loose ends (deletable): {removable}   "
-                f"One-use: {volatile}   Violations: {viol}"
+                f"One-use: {volatile}   Disconnected: {disconnected}   Violations: {viol}"
             )
 
     return TempleEditor()

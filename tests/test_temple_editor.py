@@ -133,6 +133,19 @@ def test_medallions_persist_across_editor_sessions(tmp_path, monkeypatch):
     assert w2.medallions == ["armoury"]
 
 
+def test_editor_marks_rooms_disconnected_from_entrance():
+    from PySide6.QtWidgets import QApplication
+
+    _app = QApplication.instance() or QApplication([])
+    w = build_editor()                              # entrance defaults to (4, 8)
+    w.temple.place((4, 7), "garrison")              # adjacent to the entrance -> connected
+    w.temple.place((0, 0), "armoury")               # far corner -> stranded
+    w._refresh()
+    assert w.grid._disconnected == {(0, 0)}
+    assert (4, 7) not in w.grid._disconnected
+    assert "Disconnected: 1" in w.status.text()
+
+
 def test_cellname_is_one_indexed_col_row():
     from aldur_appraiser.temple.editor import cellname
 
