@@ -60,17 +60,22 @@ def score(temple: Temple, values: dict[str, float] | None = None) -> float:
 def legal_cells(temple: Temple, room_id: str) -> list[Cell]:
     """Empty, non-blocked cells `room_id` may legally go on.
 
-    The road grows from the entrance, so the two card kinds have different rules:
+    The road grows from the entrance, so a placement must reach back to the
+    entrance — touching a *disconnected* cluster doesn't count (the game never
+    leaves rooms stranded). Concretely a neighbour only qualifies if it's the
+    entrance or an already-placed cell that is itself accessible from the
+    entrance. The two card kinds then differ:
 
-    * a **Path** extends the road — it may only sit next to the entrance or
-      another Path (a Path floating beside rooms is not a valid road), and
+    * a **Path** extends the road — it may only sit next to the entrance or an
+      accessible Path (a Path floating beside rooms is not a valid road), and
     * a **room** attaches to the road — it's legal next to the entrance, next to
-      a Path (rooms auto-connect to adjacent paths), or next to an already-placed
-      room the in-game whitelist lets it connect to (`rooms.can_connect`).
+      an accessible Path (rooms auto-connect to adjacent paths), or next to an
+      accessible room the in-game whitelist lets it connect to (`rooms.can_connect`).
 
     On an empty grid only entrance-adjacent cells are legal."""
     out: list[Cell] = []
     is_path = room_id == "path"
+    accessible = temple.accessible_cells()  # cells reachable from the entrance
     for x in range(temple.size):
         for y in range(temple.size):
             c = (x, y)
@@ -81,12 +86,13 @@ def legal_cells(temple: Temple, room_id: str) -> list[Cell]:
                 continue
             if is_path:
                 connects = any(
-                    n == temple.entrance or temple.is_path(n) for n in temple.neighbors4(c)
+                    n == temple.entrance or (temple.is_path(n) and n in accessible)
+                    for n in temple.neighbors4(c)
                 )
             else:
                 connects = any(
                     n == temple.entrance
-                    or (n in temple.cells and can_connect(room_id, temple.effective_room_id(n)))
+                    or (n in accessible and can_connect(room_id, temple.effective_room_id(n)))
                     for n in temple.neighbors4(c)
                 )
             if connects:

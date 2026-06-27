@@ -50,6 +50,19 @@ def test_spymaster_is_never_suggested_next_to_alchemy_lab():
         assert s.cell != (4, 6) and s.cell != (3, 7)
 
 
+def test_placement_must_reach_the_entrance():
+    # A cluster floating away from the entrance is unreachable, so nothing may be
+    # placed against it — the game never strands rooms. Only entrance-rooted cells
+    # are legal until the road actually connects the cluster up.
+    t = _temple(entrance=(0, 0))
+    t.place((5, 5), "garrison")            # floating cluster, far from the entrance
+    t.place((5, 6), "commander")
+    cells = set(legal_cells(t, "commander"))
+    assert (5, 4) not in cells             # touches the cluster but unreachable
+    assert (6, 5) not in cells
+    assert (1, 0) in cells and (0, 1) in cells  # only the entrance-rooted cells
+
+
 def test_path_must_attach_to_the_road_not_a_room():
     # The road grows from the entrance: a Path may only sit beside the entrance or
     # another Path, never floating next to a room.
