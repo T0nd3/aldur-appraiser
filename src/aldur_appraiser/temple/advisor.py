@@ -58,13 +58,19 @@ def score(temple: Temple, values: dict[str, float] | None = None) -> float:
 
 
 def legal_cells(temple: Temple, room_id: str) -> list[Cell]:
-    """Empty, non-blocked cells `room_id` may legally go on: it must form at least
-    one real connection (the game never allows a disconnected placement, and two
-    rooms only connect if the in-game whitelist permits it — see
-    `rooms.can_connect`). The entrance acts as a universal road connector, so a
-    cell on or beside it always qualifies. On an empty grid only entrance-adjacent
-    cells are legal."""
+    """Empty, non-blocked cells `room_id` may legally go on.
+
+    The road grows from the entrance, so the two card kinds have different rules:
+
+    * a **Path** extends the road — it may only sit next to the entrance or
+      another Path (a Path floating beside rooms is not a valid road), and
+    * a **room** attaches to the road — it's legal next to the entrance, next to
+      a Path (rooms auto-connect to adjacent paths), or next to an already-placed
+      room the in-game whitelist lets it connect to (`rooms.can_connect`).
+
+    On an empty grid only entrance-adjacent cells are legal."""
     out: list[Cell] = []
+    is_path = room_id == "path"
     for x in range(temple.size):
         for y in range(temple.size):
             c = (x, y)
@@ -73,11 +79,16 @@ def legal_cells(temple: Temple, room_id: str) -> list[Cell]:
             if c == temple.entrance:
                 out.append(c)
                 continue
-            connects = any(
-                n == temple.entrance
-                or (n in temple.cells and can_connect(room_id, temple.effective_room_id(n)))
-                for n in temple.neighbors4(c)
-            )
+            if is_path:
+                connects = any(
+                    n == temple.entrance or temple.is_path(n) for n in temple.neighbors4(c)
+                )
+            else:
+                connects = any(
+                    n == temple.entrance
+                    or (n in temple.cells and can_connect(room_id, temple.effective_room_id(n)))
+                    for n in temple.neighbors4(c)
+                )
             if connects:
                 out.append(c)
     return out

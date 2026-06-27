@@ -35,9 +35,8 @@ def test_legal_cells_respect_the_connection_whitelist():
     cells = set(legal_cells(t, "spymaster"))
     assert (4, 6) not in cells            # would touch only the Alchemy Lab -> illegal
     assert (3, 7) not in cells            # likewise
-    # but a Garrison may sit next to that Alchemy Lab? no -> also illegal there,
-    # while a Path can always connect
-    assert (4, 6) in set(legal_cells(t, "path"))
+    # an Armoury *does* connect to an Alchemy Lab, so it's legal beside it
+    assert (4, 6) in set(legal_cells(t, "armoury"))
 
 
 def test_spymaster_is_never_suggested_next_to_alchemy_lab():
@@ -49,6 +48,21 @@ def test_spymaster_is_never_suggested_next_to_alchemy_lab():
     for s in sugg:
         # every suggested spymaster cell must legally connect (path/entrance/garrison)
         assert s.cell != (4, 6) and s.cell != (3, 7)
+
+
+def test_path_must_attach_to_the_road_not_a_room():
+    # The road grows from the entrance: a Path may only sit beside the entrance or
+    # another Path, never floating next to a room.
+    t = _temple(entrance=(4, 8))
+    t.place((4, 7), "garrison")              # a room beside the entrance
+    cells = set(legal_cells(t, "path"))
+    assert (4, 8) in cells                   # the entrance itself
+    assert (3, 8) in cells and (5, 8) in cells   # beside the entrance
+    assert (4, 6) not in cells               # beside the garrison only -> illegal
+    assert (3, 7) not in cells               # beside the garrison only -> illegal
+    # a path next to an existing path is fine
+    t.place((3, 8), "path")
+    assert (3, 7) in set(legal_cells(t, "path"))  # now beside a path
 
 
 def test_suggest_places_third_garrison_next_to_commander():
