@@ -47,9 +47,9 @@ minimising rooms lost to destabilisation.
 - Tests: `tests/test_temple_rooms.py` (5, passing).
 
 ## Open VERIFY items (don't block the engine)
-1. **Card/display-name mappings:** Barracks=Garrison, Depot=Armoury,
-   Dynamo=Generator. (RESOLVED: Prosthetic Research is its OWN room, upgraded by
-   an adjacent Flesh Surgeon.)
+1. **Card/display-name mappings (RESOLVED via Hold-Alt):** Barracks=Garrison,
+   Depot=Armoury, Dynamo=Generator, Thaumaturge's Laboratory=Thaumaturge,
+   **Prosthetic Research=Synthflesh Lab** (a card name, NOT a separate room).
 2. **Per-tier upgrade COUNTS** where the table is silent (Armoury, Smithy,
    Generator, Thaumaturge, Corruption, …) — assumed **1 adjacent → T2, 2 → T3**.
    Confirmed: Commander 2/3 Garrison, Alchemy 1/2 Thaumaturge, Golem 2 Generators

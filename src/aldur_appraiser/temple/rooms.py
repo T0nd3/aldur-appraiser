@@ -87,6 +87,7 @@ ROOMS: dict[str, Room] = {
     "transcendent_barracks": Room(
         id="transcendent_barracks", name="Transcendent Barracks", category="barrack",
         bonus="more Magic Monsters",
+        upgraded_by=(_u("generator"), _u("synthflesh_lab")),
         notes=("Created when a Synthflesh Lab converts an adjacent Garrison.",),
     ),
     # --- production line -----------------------------------------------------
@@ -109,7 +110,8 @@ ROOMS: dict[str, Room] = {
     ),
     "synthflesh_lab": Room(
         id="synthflesh_lab", name="Synthflesh Lab", category="production",
-        bonus="Monsters grant increased Experience",
+        bonus="Monsters grant increased Experience (T1 10%)",
+        aka=("Prosthetic Research",),  # the card that places a Synthflesh Lab
         cannot_connect=("spymaster",),
         converts=("garrison->transcendent_barracks",),
         upgraded_by=(_u("flesh_surgeon", {2: 1}), _u("generator", {3: 1})),
@@ -119,15 +121,7 @@ ROOMS: dict[str, Room] = {
         bonus="Unique Monsters have increased Effectiveness; Limb Modification; "
               "T3 Transcension Device",
         upgraded_by=(_u("synthflesh_lab", {2: 1}),),
-        notes=(
-            "A Synthflesh Lab powered by a Generator upgrades it to T3.",
-            "Upgrades an adjacent Prosthetic Research room.",
-        ),
-    ),
-    "prosthetic_research": Room(
-        id="prosthetic_research", name="Prosthetic Research", category="production",
-        bonus="(VERIFY effect) — its own room card, upgraded by an adjacent Flesh Surgeon",
-        upgraded_by=(_u("flesh_surgeon"),),
+        notes=("A Synthflesh Lab powered by a Generator upgrades it to T3.",),
     ),
     # --- generator -----------------------------------------------------------
     "generator": Room(
@@ -145,7 +139,7 @@ ROOMS: dict[str, Room] = {
     "thaumaturge": Room(
         id="thaumaturge", name="Thaumaturge's Laboratory", category="ritual",
         bonus="increased Effect of Temple Mods from Corruption Chambers/Treasure "
-              "Vaults/Sacrificial Chambers; adds Quadrilla Sergeant",
+              "Vaults/Sacrificial Chambers (T1 8%); adds Quadrilla Sergeant",
         upgraded_by=(_u("sacrificial_chamber"),),
         notes=("Upgraded by an adjacent Sacrificial Chamber of Tier 2 or 3.",),
     ),
