@@ -159,6 +159,31 @@ def can_orphan(room: Room) -> bool:
     return room.category == "special"
 
 
+def _card_name_index() -> dict[str, str]:
+    """lower-cased in-game label (room name + every `aka`) -> room id. The drawn
+    cards use alternate names (Bronzeworks=Smithy, Dynamo=Generator, Chamber of
+    Souls=Alchemy Lab, Sealed Vault=Treasure Vault, Surgeon's Ward=Flesh Surgeon)."""
+    index: dict[str, str] = {}
+    for rid, room in ROOMS.items():
+        index[room.name.lower()] = rid
+        for alias in room.aka:
+            index[alias.lower()] = rid
+    return index
+
+
+def card_name_to_id(text: str, *, cutoff: float = 72.0) -> str | None:
+    """Fuzzy-map an OCR'd card label to a room id (None if nothing matches well).
+    Uses the same matcher as the pricing OCR so light OCR noise is tolerated."""
+    from rapidfuzz import fuzz, process
+
+    text = text.strip().lower()
+    if not text:
+        return None
+    index = _card_name_index()
+    match = process.extractOne(text, index.keys(), scorer=fuzz.ratio, score_cutoff=cutoff)
+    return index[match[0]] if match else None
+
+
 ROOMS: dict[str, Room] = {
     # --- barracks line -------------------------------------------------------
     "garrison": Room(
@@ -218,6 +243,7 @@ ROOMS: dict[str, Room] = {
     "smithy": Room(
         id="smithy", name="Smithy", category="production",
         bonus="Chests have increased Item Rarity (T2 30%); Vaal Infuser",
+        aka=("Bronzeworks",),  # in-game card / T1 display name
         upgraded_by=(
             _count(2, ["golem_works", "generator"], 1),
             _count(3, ["golem_works", "generator"], 2),
@@ -244,6 +270,7 @@ ROOMS: dict[str, Room] = {
         id="flesh_surgeon", name="Flesh Surgeon's Ward", category="production",
         bonus="Unique Monsters have increased Effectiveness (T1 10%); Limb "
               "Modification; T3 Transcension Device",
+        aka=("Surgeon's Ward",),  # in-game card name
         destabilises_at=3,  # T3 Transcension Device destabilises the room on use
         upgraded_by=(
             _count(2, ["synthflesh_lab"], 1),
@@ -287,6 +314,7 @@ ROOMS: dict[str, Room] = {
         id="alchemy_lab", name="Alchemy Lab", category="ritual",
         bonus="increased Rarity of Items and Gold found (T1 10% / T2 25%); T1-2 "
               "Soul Core Cache, T3 Soul Core Infuser (-> Core Destabiliser)",
+        aka=("Chamber of Souls",),  # in-game card name
         destabilises_at=3,  # ALT-verified: T3 Soul Core Infuser destabilises on use
         upgraded_by=(_count(2, ["thaumaturge"], 1), _count(3, ["thaumaturge"], 2)),
     ),

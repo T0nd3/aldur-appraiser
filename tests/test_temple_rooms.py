@@ -2,7 +2,31 @@
 
 from __future__ import annotations
 
-from aldur_appraiser.temple.rooms import ROOMS, Upgrade, destabilises, is_volatile, validate
+from aldur_appraiser.temple.rooms import (
+    ROOMS,
+    Upgrade,
+    card_name_to_id,
+    destabilises,
+    is_volatile,
+    validate,
+)
+
+
+def test_card_name_to_id_maps_ingame_card_labels():
+    # the drawn cards use alternate names; map them back to our room ids
+    assert card_name_to_id("Path") == "path"
+    assert card_name_to_id("Dynamo") == "generator"
+    assert card_name_to_id("Sealed Vault") == "treasure_vault"
+    assert card_name_to_id("Bronzeworks") == "smithy"
+    assert card_name_to_id("Chamber of Souls") == "alchemy_lab"
+    assert card_name_to_id("Surgeon's Ward") == "flesh_surgeon"
+    assert card_name_to_id("Spymaster's Study") == "spymaster"
+
+
+def test_card_name_to_id_tolerates_ocr_noise_and_rejects_junk():
+    assert card_name_to_id("Bronzewqrks") == "smithy"     # one wrong letter
+    assert card_name_to_id("  dynamo ") == "generator"     # whitespace/case
+    assert card_name_to_id("xyzzy nonsense") is None       # no good match
 
 
 def test_treasure_vault_and_architect_rooms_are_volatile():
