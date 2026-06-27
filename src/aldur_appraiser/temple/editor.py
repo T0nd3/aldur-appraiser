@@ -268,6 +268,8 @@ def build_editor():
             self.hand_list = QListWidget()
             add_card = QPushButton("Add selected room to hand")
             add_card.clicked.connect(self._add_card)
+            remove_card = QPushButton("Remove selected card")
+            remove_card.clicked.connect(self._remove_card)
             clear_hand = QPushButton("Clear hand")
             clear_hand.clicked.connect(self._clear_hand)
             suggest_btn = QPushButton("Suggest placement")
@@ -285,6 +287,8 @@ def build_editor():
                     self.medallion_list.addItem(ROOMS[rid].name)
             add_med = QPushButton("Add selected room to medallions")
             add_med.clicked.connect(self._add_medallion)
+            remove_med = QPushButton("Remove selected medallion")
+            remove_med.clicked.connect(self._remove_medallion)
             clear_med = QPushButton("Clear medallions")
             clear_med.clicked.connect(self._clear_medallions)
 
@@ -300,10 +304,12 @@ def build_editor():
             left.addWidget(QLabel("Hand (drawn cards this run)"))
             left.addWidget(self.hand_list, 1)
             left.addWidget(add_card)
+            left.addWidget(remove_card)
             left.addWidget(clear_hand)
             left.addWidget(QLabel("Medallion rooms (held across runs)"))
             left.addWidget(self.medallion_list, 1)
             left.addWidget(add_med)
+            left.addWidget(remove_med)
             left.addWidget(clear_med)
             left.addWidget(suggest_btn)
             row = QHBoxLayout(self)
@@ -325,6 +331,12 @@ def build_editor():
                 self.hand.append(self.brush)
                 self.hand_list.addItem(ROOMS[self.brush].name)
 
+        def _remove_card(self) -> None:
+            row = self.hand_list.currentRow()
+            if 0 <= row < len(self.hand):
+                del self.hand[row]
+                self.hand_list.takeItem(row)
+
         def _clear_hand(self) -> None:
             self.hand.clear()
             self.hand_list.clear()
@@ -335,6 +347,13 @@ def build_editor():
             if self.brush != ERASE:
                 self.medallions.append(self.brush)
                 self.medallion_list.addItem(ROOMS[self.brush].name)
+                self._persist()
+
+        def _remove_medallion(self) -> None:
+            row = self.medallion_list.currentRow()
+            if 0 <= row < len(self.medallions):
+                del self.medallions[row]
+                self.medallion_list.takeItem(row)
                 self._persist()
 
         def _clear_medallions(self) -> None:

@@ -61,6 +61,21 @@ def test_editor_advisor_highlights_best_cell():
     assert w.grid._highlights == {(4, 6)}
 
 
+def test_remove_selected_card_from_hand():
+    from PySide6.QtWidgets import QApplication
+
+    _app = QApplication.instance() or QApplication([])
+    w = build_editor()
+    for rid in ("garrison", "commander", "path"):
+        w.brush = rid
+        w._add_card()
+    assert w.hand == ["garrison", "commander", "path"]
+    w.hand_list.setCurrentRow(1)                # select "Commander"
+    w._remove_card()
+    assert w.hand == ["garrison", "path"]
+    assert w.hand_list.count() == 2
+
+
 def test_editor_preset_feeds_the_advisor():
     from PySide6.QtWidgets import QApplication
 
