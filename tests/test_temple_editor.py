@@ -214,6 +214,21 @@ def test_medallion_brush_boosts_a_room_to_tier_4():
     assert (4, 4) not in w.temple.medallion_boosts
 
 
+def test_grid_tooltip_shows_room_name_id_and_tier():
+    from PySide6.QtWidgets import QApplication
+
+    _app = QApplication.instance() or QApplication([])
+    w = build_editor()
+    w.temple.place((4, 4), "commander")
+    w.temple.place((5, 4), "garrison")
+    w.temple.place((3, 4), "garrison")        # Commander -> T2
+    w._refresh()
+    tip = w.grid._tooltip_for((4, 4))
+    assert "Commander's Chamber" in tip and "[commander]" in tip and "Tier 2" in tip
+    assert w.grid._tooltip_for((6, 6)) == ""          # empty cell -> no tooltip
+    assert w.grid._tooltip_for((4, 4)).count("\n") >= 1  # name line + effect line
+
+
 def test_cellname_is_one_indexed_col_row():
     from aldur_appraiser.temple.editor import cellname
 

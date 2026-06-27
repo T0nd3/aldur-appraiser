@@ -112,7 +112,7 @@ def load_layout() -> tuple[Temple | None, str, list[str]]:
 
 def build_editor():
     """Construct the editor widget (imports PySide6 lazily). Returns the widget."""
-    from PySide6.QtCore import QPointF, QRectF, Qt, Signal
+    from PySide6.QtCore import QEvent, QPointF, QRectF, Qt, Signal
     from PySide6.QtGui import QColor, QFont, QPainter, QPen, QPolygonF
     from PySide6.QtWidgets import (
         QCheckBox,
@@ -121,6 +121,7 @@ def build_editor():
         QLabel,
         QListWidget,
         QPushButton,
+        QToolTip,
         QVBoxLayout,
         QWidget,
     )
@@ -202,6 +203,31 @@ def build_editor():
         def leaveEvent(self, _e) -> None:  # noqa: N802
             self._hover = None
             self.update()
+
+        def _tooltip_for(self, c) -> str:
+            """Hover text for a cell: room name, id, current tier and effect."""
+            if c is None:
+                return ""
+            rid = self.temple.cells.get(c)
+            if rid is None:
+                return "" if c not in self.temple.blocked else "Blocked / destabilised"
+            if rid == "path":
+                return "Path — road connector"
+            room = ROOMS[rid]
+            lines = [f"{room.name}  [{rid}]  ·  Tier {self._tiers.get(c, 1)}"]
+            if room.bonus:
+                lines.append(room.bonus)
+            return "\n".join(lines)
+
+        def event(self, e):  # per-cell tooltips
+            if e.type() == QEvent.ToolTip:
+                text = self._tooltip_for(self._cell_at(e.pos().x(), e.pos().y()))
+                if text:
+                    QToolTip.showText(e.globalPos(), text, self)
+                else:
+                    QToolTip.hideText()
+                return True
+            return super().event(e)
 
         def _power_cells(self) -> set[tuple[int, int]]:
             """Rooms actually powered by the hovered Generator (engine model)."""
