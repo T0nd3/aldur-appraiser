@@ -54,6 +54,7 @@ def build_editor():
             self._hover: tuple[int, int] | None = None
             self._tiers: dict[tuple[int, int], int] = {}
             self._violation_cells: set[tuple[int, int]] = set()
+            self._highlights: set[tuple[int, int]] = set()
             self.setMouseTracking(True)
             self.setFixedSize(self.cell * temple.size, self.cell * temple.size)
             self._font = QFont("DejaVu Sans")
@@ -62,6 +63,10 @@ def build_editor():
 
         def refresh(self) -> None:
             self.temple_changed()
+
+        def set_highlights(self, cells) -> None:
+            self._highlights = set(cells)
+            self.update()
 
         def temple_changed(self) -> None:
             self._tiers = self.temple.tiers()
@@ -133,6 +138,12 @@ def build_editor():
                         p.setFont(self._font)
                         tier = self._tiers.get(c, 1)
                         p.drawText(r, Qt.AlignCenter, f"{abbrev(rid)}\n{'I' * tier}")
+                    if c in self._highlights:
+                        pen = p.pen()
+                        p.setPen(QColor("#ffd24a"))
+                        p.drawRect(r.adjusted(2, 2, -2, -2))
+                        p.drawRect(r.adjusted(4, 4, -4, -4))
+                        p.setPen(pen)
             p.end()
 
     class TempleEditor(QWidget):
@@ -156,18 +167,62 @@ def build_editor():
             clear.clicked.connect(self._clear)
             self.status = QLabel()
 
+            # --- per-run advisor: a hand of drawn cards + suggestions ----------
+            self.hand: list[str] = []
+            self.hand_list = QListWidget()
+            add_card = QPushButton("Add selected room to hand")
+            add_card.clicked.connect(self._add_card)
+            clear_hand = QPushButton("Clear hand")
+            clear_hand.clicked.connect(self._clear_hand)
+            suggest_btn = QPushButton("Suggest placement")
+            suggest_btn.clicked.connect(self._suggest)
+            self.suggestions = QLabel("Add your drawn cards, then Suggest.")
+            self.suggestions.setWordWrap(True)
+
             left = QVBoxLayout()
             left.addWidget(QLabel("Room (left-click place · right-click erase)"))
             left.addWidget(self.palette, 1)
             left.addWidget(clear)
+            left.addWidget(QLabel("Hand (drawn cards this run)"))
+            left.addWidget(self.hand_list, 1)
+            left.addWidget(add_card)
+            left.addWidget(clear_hand)
+            left.addWidget(suggest_btn)
             row = QHBoxLayout(self)
             row.addLayout(left)
             grid_col = QVBoxLayout()
             grid_col.addWidget(self.grid)
             grid_col.addWidget(self.status)
+            grid_col.addWidget(self.suggestions)
             row.addLayout(grid_col)
 
             self._refresh()
+
+        def _add_card(self) -> None:
+            if self.brush != ERASE:
+                self.hand.append(self.brush)
+                self.hand_list.addItem(ROOMS[self.brush].name)
+
+        def _clear_hand(self) -> None:
+            self.hand.clear()
+            self.hand_list.clear()
+            self.grid.set_highlights(())
+            self.suggestions.setText("Add your drawn cards, then Suggest.")
+
+        def _suggest(self) -> None:
+            from aldur_appraiser.temple.advisor import suggest
+
+            if not self.hand:
+                self.suggestions.setText("Hand is empty — add the cards you drew.")
+                return
+            ranked = suggest(self.temple, self.hand, top=5)
+            if not ranked:
+                self.suggestions.setText("No legal placement found.")
+                self.grid.set_highlights(())
+                return
+            self.grid.set_highlights([ranked[0].cell])
+            lines = [f"{i + 1}. {s.note}  @{s.cell}  (+{s.gain:.1f})" for i, s in enumerate(ranked)]
+            self.suggestions.setText("Best placements:\n" + "\n".join(lines))
 
         def _on_brush(self, idx: int) -> None:
             if idx <= 0:

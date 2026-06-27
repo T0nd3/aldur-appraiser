@@ -69,9 +69,11 @@ minimising rooms lost to destabilisation.
   (left-click place / right-click erase), category colours, live tiers, hovered
   Generator power-radius highlight, entrance marker, cannot-connect violations
   (red border), status line. Launches via `appraiser temple`.
-- [ ] **Phase 3 — Per-run advisor:** given current grid + the 6 drawn cards →
-  recommend best placements (maximise upgrades, set up future upgrades, protect
-  high-value rooms / avoid orphaning).
+- [x] **Phase 3 — Per-run advisor** — `temple/advisor.py` (+ `tests/test_temple_advisor.py`).
+  `score()` (Σ value·tier − violation penalty), `legal_cells()` (connected only),
+  `suggest()` ranks every legal (card, cell) by score delta, `plan_hand()` greedily
+  places a whole hand. Wired into the editor: a "hand" list + **Suggest** button
+  that ranks placements and gold-highlights the best cell.
 - [ ] **Phase 4 (optional/future) — Live overlay:** read the temple grid + drawn
   cards via vision and suggest placements in-game. Hard/fragile — later.
 
@@ -98,9 +100,15 @@ minimising rooms lost to destabilisation.
   player-provided screenshots).
 
 ## Resume here
-Phases 1 + 2 are done (`temple/rooms.py`, `temple/engine.py`, `temple/editor.py`;
-`appraiser temple` launches the editor; 17 temple tests).
-Next concrete step is **Phase 3 (per-run advisor)**: given the current grid + the
-6 drawn cards, rank placements by resulting tier gain (and future upgrade
-potential). Pure function on the engine; unit-testable. Verify the open items
-above when convenient (they only affect exact numbers/labels, not the structure).
+Phases 1–3 are done (dataset, engine, editor, advisor; `appraiser temple`;
+25 temple tests). The planner is usable end-to-end: build a grid, enter your
+drawn hand, get ranked placement suggestions.
+
+Remaining / future work:
+- Verify the open data items above (upgrade counts, % numbers, card-name and
+  Restricted-room mappings) and refine `rooms.py` + per-room `values` weighting.
+- Smarter advisor: lookahead / future-upgrade potential, not just immediate gain;
+  let the user weight which rooms are "valuable".
+- **Phase 4 (optional) — live overlay:** read the temple grid + drawn cards via
+  vision and suggest in-game. Hard/fragile; only if the offline planner proves
+  useful first.

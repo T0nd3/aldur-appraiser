@@ -44,6 +44,9 @@ class Temple:
 
     # --- grid basics ---------------------------------------------------------
 
+    def copy(self) -> "Temple":
+        return Temple(self.size, self.entrance, set(self.blocked), dict(self.cells))
+
     def in_bounds(self, c: Cell) -> bool:
         return 0 <= c[0] < self.size and 0 <= c[1] < self.size
 
