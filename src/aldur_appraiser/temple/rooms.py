@@ -74,9 +74,12 @@ ROOMS: dict[str, Room] = {
     # --- barracks line -------------------------------------------------------
     "garrison": Room(
         id="garrison", name="Garrison", category="barrack",
-        bonus="increased Number of Magic Monster Packs (T2 12% / T3 20%)",
+        bonus="increased Number of Monster Packs (T1 8% / T2 12% / T3 20%); "
+              "Normal Monster Effectiveness (T2 10% / T3 30%)",
         aka=("Barracks", "Guardhouse"),
-        upgraded_by=(_u("commander"),),  # Commander's tooltip: "Upgrades: Garrison"
+        # Hold-Alt "Upgraded by": Commander + Armoury raise its tier; Synthflesh and
+        # Spymaster instead CONVERT it (Transcendent/Legion, handled via `converts`).
+        upgraded_by=(_u("commander"), _u("armoury")),
         converts=("garrison->transcendent_barracks", "garrison->legion_barracks"),
         notes=(
             "An adjacent Synthflesh Lab converts it to Transcendent Barracks, an "

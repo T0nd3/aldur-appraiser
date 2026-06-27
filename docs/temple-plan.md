@@ -67,8 +67,9 @@ minimising rooms lost to destabilisation.
    per-room-type today. Needs an UpgradeRule that can match a category/group.
    Hold-Alt verified: Generator, Thaumaturge, Synthflesh Lab, Smithy, Transcendent
    Barracks, Sacrificial Chamber, Golem Works, Commander, Flesh Surgeon, Alchemy
-   Lab (Flesh Surgeon T1 10, Alchemy T1 10). Remaining unseen: Armoury, Corruption
-   Chamber, Garrison, Legion Barracks, Spymaster — all inverse-confirmed. Commander is upgraded by
+   Lab, Garrison. Garrison T1 8 (packs); upgraded by Commander+Armoury (tier),
+   converted by Synthflesh/Spymaster. Remaining unseen: Armoury, Corruption
+   Chamber, Legion Barracks, Spymaster — all inverse-confirmed. Commander is upgraded by
    adjacent Garrison OR Transcendent Barracks (NOT Legion) and upgrades adjacent
    Garrisons in turn. Tier %: Garrison T2 12/T3 20, Armoury T1 10/T3 60, Smithy T2
    30, Golem Works T2 15, Commander T1 10, Thaumaturge T1 8/T2 15/T3 22, Synthflesh
