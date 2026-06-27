@@ -61,30 +61,41 @@ def layout_path():
     return config_dir() / "temple_layout.json"
 
 
-def save_layout(temple, preset: str = "") -> None:
-    """Persist the current layout + chosen preset (best-effort; ignores IO errors)."""
+def save_layout(temple, preset: str = "", medallions: list[str] | None = None) -> None:
+    """Persist the current layout + chosen preset + medallion rooms (best-effort;
+    ignores IO errors)."""
     import json
 
     try:
         p = layout_path()
         p.parent.mkdir(parents=True, exist_ok=True)
-        p.write_text(json.dumps({"temple": temple.to_dict(), "preset": preset}), encoding="utf-8")
+        p.write_text(
+            json.dumps(
+                {
+                    "temple": temple.to_dict(),
+                    "preset": preset,
+                    "medallions": list(medallions or []),
+                }
+            ),
+            encoding="utf-8",
+        )
     except OSError:
         pass
 
 
-def load_layout() -> tuple[Temple | None, str]:
-    """Return (temple, preset_name) from the saved layout, or (None, '') if absent."""
+def load_layout() -> tuple[Temple | None, str, list[str]]:
+    """Return (temple, preset_name, medallion_rooms) from the saved layout, or
+    (None, '', []) if absent."""
     import json
 
     try:
         p = layout_path()
         if p.exists():
             d = json.loads(p.read_text(encoding="utf-8"))
-            return Temple.from_dict(d["temple"]), d.get("preset", "")
+            return Temple.from_dict(d["temple"]), d.get("preset", ""), list(d.get("medallions", []))
     except (OSError, ValueError, KeyError):
         pass
-    return None, ""
+    return None, "", []
 
 
 def build_editor():
@@ -220,7 +231,7 @@ def build_editor():
         def __init__(self):
             super().__init__()
             self.setWindowTitle("Aldur — Temple Planner")
-            self.temple, self._saved_preset = load_layout()  # restore last session
+            self.temple, self._saved_preset, saved_medallions = load_layout()  # restore
             if self.temple is None:
                 self.temple = Temple()
             self.brush = "garrison"
@@ -264,6 +275,19 @@ def build_editor():
             self.suggestions = QLabel("Add your drawn cards, then Suggest.")
             self.suggestions.setWordWrap(True)
 
+            # --- medallion rooms: persistent extra cards from Medallions --------
+            # held across runs, so they persist (unlike the per-run random hand)
+            # and feed the advisor alongside the drawn hand.
+            self.medallions: list[str] = list(saved_medallions)
+            self.medallion_list = QListWidget()
+            for rid in self.medallions:
+                if rid in ROOMS:
+                    self.medallion_list.addItem(ROOMS[rid].name)
+            add_med = QPushButton("Add selected room to medallions")
+            add_med.clicked.connect(self._add_medallion)
+            clear_med = QPushButton("Clear medallions")
+            clear_med.clicked.connect(self._clear_medallions)
+
             left = QVBoxLayout()
             left.addWidget(QLabel("Room (left-click place · right-click erase)"))
             left.addWidget(self.palette, 1)
@@ -277,6 +301,10 @@ def build_editor():
             left.addWidget(self.hand_list, 1)
             left.addWidget(add_card)
             left.addWidget(clear_hand)
+            left.addWidget(QLabel("Medallion rooms (held across runs)"))
+            left.addWidget(self.medallion_list, 1)
+            left.addWidget(add_med)
+            left.addWidget(clear_med)
             left.addWidget(suggest_btn)
             row = QHBoxLayout(self)
             row.addLayout(left)
@@ -303,13 +331,25 @@ def build_editor():
             self.grid.set_highlights(())
             self.suggestions.setText("Add your drawn cards, then Suggest.")
 
+        def _add_medallion(self) -> None:
+            if self.brush != ERASE:
+                self.medallions.append(self.brush)
+                self.medallion_list.addItem(ROOMS[self.brush].name)
+                self._persist()
+
+        def _clear_medallions(self) -> None:
+            self.medallions.clear()
+            self.medallion_list.clear()
+            self._persist()
+
         def _suggest(self) -> None:
             from aldur_appraiser.temple.advisor import suggest
 
-            if not self.hand:
+            cards = self.hand + self.medallions  # drawn cards plus medallion rooms
+            if not cards:
                 self.suggestions.setText("Hand is empty — add the cards you drew.")
                 return
-            ranked = suggest(self.temple, self.hand, values=self.weights, top=5)
+            ranked = suggest(self.temple, cards, values=self.weights, top=5)
             if not ranked:
                 self.suggestions.setText("No legal placement found.")
                 self.grid.set_highlights(())
@@ -353,7 +393,7 @@ def build_editor():
             self._persist()
 
         def _persist(self) -> None:
-            save_layout(self.temple, self.preset_select.currentText())
+            save_layout(self.temple, self.preset_select.currentText(), self.medallions)
 
         def closeEvent(self, e) -> None:  # noqa: N802
             self._persist()

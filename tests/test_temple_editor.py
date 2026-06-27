@@ -74,6 +74,34 @@ def test_editor_preset_feeds_the_advisor():
     assert "Alchemy Lab" in w.suggestions.text().splitlines()[1]
 
 
+def test_medallion_rooms_feed_the_advisor():
+    from PySide6.QtWidgets import QApplication
+
+    _app = QApplication.instance() or QApplication([])
+    w = build_editor()
+    w.temple.place((4, 8), "garrison")          # anchor at the entrance
+    w.medallions = ["alchemy_lab"]              # a medallion-granted Armoury/Lab
+    w._suggest()
+    # the medallion room is considered even with an empty drawn hand
+    assert "Alchemy Lab" in w.suggestions.text()
+
+
+def test_medallions_persist_across_editor_sessions(tmp_path, monkeypatch):
+    from PySide6.QtWidgets import QApplication
+
+    import aldur_appraiser.temple.editor as ed
+
+    monkeypatch.setattr(ed, "layout_path", lambda: tmp_path / "layout.json")
+    _app = QApplication.instance() or QApplication([])
+
+    w = ed.build_editor()
+    w.medallions = ["armoury"]
+    w._persist()
+
+    w2 = ed.build_editor()
+    assert w2.medallions == ["armoury"]
+
+
 def test_cellname_is_one_indexed_col_row():
     from aldur_appraiser.temple.editor import cellname
 
