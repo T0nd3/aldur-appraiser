@@ -74,8 +74,8 @@ ROOMS: dict[str, Room] = {
     # --- barracks line -------------------------------------------------------
     "garrison": Room(
         id="garrison", name="Garrison", category="barrack",
-        bonus="increased Number of Monster Packs (T1 8% / T2 12% / T3 20%); "
-              "Normal Monster Effectiveness (T2 10% / T3 30%)",
+        bonus="increased Number of Monster Packs (T1 8% / T2 12% / T3 16%); "
+              "Normal Monster Effectiveness (T2 10% / T3 13%)",
         aka=("Barracks", "Guardhouse"),
         # Hold-Alt "Upgraded by": Commander + Armoury raise its tier; Synthflesh and
         # Spymaster instead CONVERT it (Transcendent/Legion, handled via `converts`).
@@ -171,8 +171,8 @@ ROOMS: dict[str, Room] = {
     ),
     "alchemy_lab": Room(
         id="alchemy_lab", name="Alchemy Lab", category="ritual",
-        bonus="increased Rarity of Items and Gold found (T1 10%); T1-2 Soul Core "
-              "Cache, T3 Soul Core Infuser (-> Core Destabiliser)",
+        bonus="increased Rarity of Items and Gold found (T1 10% / T2 25%); T1-2 "
+              "Soul Core Cache, T3 Soul Core Infuser (-> Core Destabiliser)",
         upgraded_by=(_u("thaumaturge", {2: 1, 3: 2}),),
     ),
     "corruption_chamber": Room(

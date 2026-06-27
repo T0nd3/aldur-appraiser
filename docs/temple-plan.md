@@ -67,9 +67,9 @@ minimising rooms lost to destabilisation.
    per-room-type today. Needs an UpgradeRule that can match a category/group.
    Hold-Alt verified: Generator, Thaumaturge, Synthflesh Lab, Smithy, Transcendent
    Barracks, Sacrificial Chamber, Golem Works, Commander, Flesh Surgeon, Alchemy
-   Lab, Garrison. Garrison T1 8 (packs); upgraded by Commander+Armoury (tier),
-   converted by Synthflesh/Spymaster. Remaining unseen: Armoury, Corruption
-   Chamber, Legion Barracks, Spymaster — all inverse-confirmed. Commander is upgraded by
+   Lab, Garrison, Corruption Chamber. Garrison packs 8/12/16, normal -/10/13;
+   Alchemy T2 25. Remaining unseen: Armoury, Legion Barracks, Spymaster — all
+   inverse-confirmed. Commander is upgraded by
    adjacent Garrison OR Transcendent Barracks (NOT Legion) and upgrades adjacent
    Garrisons in turn. Tier %: Garrison T2 12/T3 20, Armoury T1 10/T3 60, Smithy T2
    30, Golem Works T2 15, Commander T1 10, Thaumaturge T1 8/T2 15/T3 22, Synthflesh
@@ -81,7 +81,15 @@ minimising rooms lost to destabilisation.
    Note: high-tier ritual rooms (Thaumaturge/Sacrificial/Alchemy/Corruption) hold
    a one-use "device" that destabilises the room when used (optional).
 4. **Exact per-tier % numbers** (value display only; not needed for structure).
-5. **"Restricted"** RESOLVED: topological articulation points (engine models it).
+5. **"Restricted Rooms" — TERMINOLOGY CONFLICT (open):** the in-game Architect's
+   Chamber says Xipocado's Console "can be used to place various Restricted Rooms"
+   — i.e. the game's "Restricted Rooms" are the **Architect special reward rooms**
+   (already our `architect_room`/`volatile`), which always destabilise. That's
+   NOT the topological articulation concept the player first described. The
+   articulation/orphan idea is still a useful strategic hint (avoid sole-path
+   valuable rooms vs random destabilisation) but is MISLABELLED as "restricted"
+   in the engine — decide whether to rename it (chokepoint / orphan-risk) and keep
+   it, and treat the architect Vaults as the real "Restricted Rooms".
 6. Which rooms count as **"valuable"** for the objective/advisor weighting
    (likely user-configurable) + the Prosthetic Research effect.
 
