@@ -54,6 +54,39 @@ def cellname(c: tuple[int, int]) -> str:
     return f"col {c[0] + 1}, row {c[1] + 1}"
 
 
+def layout_path():
+    """File the editor auto-saves the working layout to (platformdirs config)."""
+    from aldur_appraiser.config import config_dir
+
+    return config_dir() / "temple_layout.json"
+
+
+def save_layout(temple, preset: str = "") -> None:
+    """Persist the current layout + chosen preset (best-effort; ignores IO errors)."""
+    import json
+
+    try:
+        p = layout_path()
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(json.dumps({"temple": temple.to_dict(), "preset": preset}), encoding="utf-8")
+    except OSError:
+        pass
+
+
+def load_layout() -> tuple[Temple | None, str]:
+    """Return (temple, preset_name) from the saved layout, or (None, '') if absent."""
+    import json
+
+    try:
+        p = layout_path()
+        if p.exists():
+            d = json.loads(p.read_text(encoding="utf-8"))
+            return Temple.from_dict(d["temple"]), d.get("preset", "")
+    except (OSError, ValueError, KeyError):
+        pass
+    return None, ""
+
+
 def build_editor():
     """Construct the editor widget (imports PySide6 lazily). Returns the widget."""
     from PySide6.QtCore import QRectF, Qt, Signal
@@ -187,7 +220,9 @@ def build_editor():
         def __init__(self):
             super().__init__()
             self.setWindowTitle("Aldur — Temple Planner")
-            self.temple = Temple()
+            self.temple, self._saved_preset = load_layout()  # restore last session
+            if self.temple is None:
+                self.temple = Temple()
             self.brush = "garrison"
 
             self.grid = GridWidget(self.temple)
@@ -251,7 +286,10 @@ def build_editor():
             grid_col.addWidget(self.suggestions)
             row.addLayout(grid_col)
 
-            self._on_preset(self.preset_select.currentText())
+            if self._saved_preset in PRESETS:
+                self.preset_select.setCurrentText(self._saved_preset)  # fires _on_preset
+            else:
+                self._on_preset(self.preset_select.currentText())
             self._refresh()
 
         def _add_card(self) -> None:
@@ -290,6 +328,8 @@ def build_editor():
             self.weights = dict(PRESETS.get(name, {}))
             shown = ", ".join(f"{ROOMS[r].name} {w:g}" for r, w in sorted(self.weights.items()))
             self.priorities.setText(f"Priorities: {shown or 'all rooms equal'}")
+            if getattr(self, "preset_select", None) is not None:
+                self._persist()
 
         def _on_cell(self, cell, button) -> None:
             from PySide6.QtCore import Qt
@@ -304,10 +344,20 @@ def build_editor():
                 except ValueError:
                     pass
             self._refresh()
+            self._persist()
 
         def _clear(self) -> None:
             self.temple.cells.clear()
+            self.temple.tier_overrides.clear()
             self._refresh()
+            self._persist()
+
+        def _persist(self) -> None:
+            save_layout(self.temple, self.preset_select.currentText())
+
+        def closeEvent(self, e) -> None:  # noqa: N802
+            self._persist()
+            super().closeEvent(e)
 
         def _refresh(self) -> None:
             self.grid.temple_changed()

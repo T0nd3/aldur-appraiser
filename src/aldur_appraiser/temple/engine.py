@@ -53,6 +53,31 @@ class Temple:
         t.tier_overrides = dict(self.tier_overrides)
         return t
 
+    def to_dict(self) -> dict:
+        """Plain-JSON snapshot (for persisting a layout)."""
+        return {
+            "size": self.size,
+            "entrance": list(self.entrance),
+            "blocked": [list(c) for c in sorted(self.blocked)],
+            "cells": {f"{x},{y}": rid for (x, y), rid in self.cells.items()},
+            "tier_overrides": {f"{x},{y}": t for (x, y), t in self.tier_overrides.items()},
+        }
+
+    @classmethod
+    def from_dict(cls, d: dict) -> Temple:
+        def key(s: str) -> Cell:
+            x, y = s.split(",")
+            return (int(x), int(y))
+
+        t = cls(
+            size=int(d.get("size", GRID_SIZE)),
+            entrance=tuple(d.get("entrance", ENTRANCE)),  # type: ignore[arg-type]
+            blocked={tuple(c) for c in d.get("blocked", [])},  # type: ignore[misc]
+            cells={key(k): v for k, v in d.get("cells", {}).items()},
+        )
+        t.tier_overrides = {key(k): int(v) for k, v in d.get("tier_overrides", {}).items()}
+        return t
+
     def in_bounds(self, c: Cell) -> bool:
         return 0 <= c[0] < self.size and 0 <= c[1] < self.size
 

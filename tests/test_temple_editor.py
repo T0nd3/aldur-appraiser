@@ -72,6 +72,23 @@ def test_cellname_is_one_indexed_col_row():
     assert cellname((3, 6)) == "col 4, row 7"
 
 
+def test_layout_persists_across_editor_sessions(tmp_path, monkeypatch):
+    import aldur_appraiser.temple.editor as ed
+    from PySide6.QtWidgets import QApplication
+
+    monkeypatch.setattr(ed, "layout_path", lambda: tmp_path / "layout.json")
+    _app = QApplication.instance() or QApplication([])
+
+    w = ed.build_editor()                       # starts empty (tmp file absent)
+    w.temple.place((4, 7), "garrison")
+    w.preset_select.setCurrentText("Experience")
+    w._persist()
+
+    w2 = ed.build_editor()                       # a fresh session restores it
+    assert w2.temple.cells.get((4, 7)) == "garrison"
+    assert w2.preset_select.currentText() == "Experience"
+
+
 def test_editor_applies_tier_override_to_manual_room():
     from PySide6.QtCore import Qt
     from PySide6.QtWidgets import QApplication

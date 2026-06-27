@@ -115,6 +115,17 @@ def test_removable_rooms_are_the_loose_ends_of_the_chain():
     assert t.removable_room_cells() == {(4, 5), (5, 6)}
 
 
+def test_temple_to_dict_from_dict_roundtrip():
+    t = _temple(entrance=(4, 8))
+    t.place((4, 7), "garrison")
+    t.place((4, 6), "sacrificial_chamber")
+    t.tier_overrides[(4, 6)] = 3
+    t2 = Temple.from_dict(t.to_dict())
+    assert t2.cells == t.cells
+    assert t2.tier_overrides == t.tier_overrides
+    assert t2.entrance == t.entrance
+
+
 # --- manual tier override (sacrifice / assassinate rooms) --------------------
 
 
