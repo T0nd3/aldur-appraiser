@@ -541,10 +541,24 @@ def build_editor():
                     self.temple.place(cell, self.brush)
                     if ROOMS[self.brush].manual_tier:
                         self.temple.tier_overrides[cell] = self.tier_select.currentData()
+                    self._consume_card(self.brush)  # used a drawn/medallion card
                 except ValueError:
                     pass
             self._refresh()
             self._persist()
+
+        def _consume_card(self, rid: str) -> None:
+            """Placing a room spends one matching card. Prefer the drawn hand; fall
+            back to a Medallion room only if the hand has none (ambiguous when the
+            same room sits in both — the hand wins)."""
+            if rid in self.hand:
+                i = self.hand.index(rid)
+                del self.hand[i]
+                self.hand_list.takeItem(i)
+            elif rid in self.medallions:
+                i = self.medallions.index(rid)
+                del self.medallions[i]
+                self.medallion_list.takeItem(i)
 
         def _clear(self) -> None:
             self.temple.cells.clear()

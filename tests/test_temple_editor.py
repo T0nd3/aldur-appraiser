@@ -229,6 +229,45 @@ def test_grid_tooltip_shows_room_name_id_and_tier():
     assert w.grid._tooltip_for((4, 4)).count("\n") >= 1  # name line + effect line
 
 
+def test_placing_a_card_consumes_it_hand_before_medallion():
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import QApplication
+
+    _app = QApplication.instance() or QApplication([])
+    w = build_editor()
+    w.brush = "garrison"
+    w._add_card()
+    w.brush = "generator"
+    w._add_card()                                # hand: garrison, generator
+    w.brush = "generator"
+    w._add_medallion()                           # medallions: generator
+    # placing a generator spends the HAND one, leaving the medallion untouched
+    w.brush = "generator"
+    w._on_cell((4, 4), int(Qt.LeftButton.value))
+    assert w.temple.cells[(4, 4)] == "generator"
+    assert w.hand == ["garrison"]
+    assert w.hand_list.count() == 1
+    assert w.medallions == ["generator"]
+    # with no generator left in the hand, the next one comes from the medallion
+    w.brush = "generator"
+    w._on_cell((4, 5), int(Qt.LeftButton.value))
+    assert w.medallions == []
+    assert w.medallion_list.count() == 0
+
+
+def test_placing_a_room_not_in_any_list_consumes_nothing():
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import QApplication
+
+    _app = QApplication.instance() or QApplication([])
+    w = build_editor()
+    w.brush = "garrison"
+    w._add_card()
+    w.brush = "armoury"                          # not in the hand
+    w._on_cell((4, 4), int(Qt.LeftButton.value))
+    assert w.hand == ["garrison"]                # untouched
+
+
 def test_cellname_is_one_indexed_col_row():
     from aldur_appraiser.temple.editor import cellname
 
