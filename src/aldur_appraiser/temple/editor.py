@@ -124,7 +124,9 @@ def build_editor():
             self._tiers: dict[tuple[int, int], int] = {}
             self._violation_cells: set[tuple[int, int]] = set()
             self._removable: set[tuple[int, int]] = set()
-            self._highlights: set[tuple[int, int]] = set()
+            # cell -> rank (0 = best). Equal-value cells share a rank/colour;
+            # weaker ones get a higher rank and a dimmer shade.
+            self._highlights: dict[tuple[int, int], int] = {}
             self.setMouseTracking(True)
             n = self.pad + self.cell * temple.size
             self.setFixedSize(n, n)
@@ -137,9 +139,19 @@ def build_editor():
         def refresh(self) -> None:
             self.temple_changed()
 
-        def set_highlights(self, cells) -> None:
-            self._highlights = set(cells)
+        def set_highlights(self, ranks) -> None:
+            """`ranks` is either {cell: rank} (0 = best, higher = weaker/dimmer) or
+            a plain iterable of cells (all treated as the best rank)."""
+            if isinstance(ranks, dict):
+                self._highlights = dict(ranks)
+            else:
+                self._highlights = {c: 0 for c in ranks}
             self.update()
+
+        def _rank_color(self, rank: int):
+            """Gold for the best placements, dimming one step per weaker rank."""
+            factor = max(0.32, 1.0 - 0.24 * rank)
+            return QColor(int(255 * factor), int(210 * factor), int(74 * factor))
 
         def temple_changed(self) -> None:
             self._tiers = self.temple.tiers()
@@ -222,7 +234,7 @@ def build_editor():
                         p.setPen(QColor("#e08a2a"))
                         p.drawRect(r.adjusted(6, 6, -6, -6))
                     if c in self._highlights:
-                        p.setPen(QColor("#ffd24a"))
+                        p.setPen(self._rank_color(self._highlights[c]))
                         p.drawRect(r.adjusted(2, 2, -2, -2))
                         p.drawRect(r.adjusted(4, 4, -4, -4))
             p.end()
@@ -373,7 +385,16 @@ def build_editor():
                 self.suggestions.setText("No legal placement found.")
                 self.grid.set_highlights(())
                 return
-            self.grid.set_highlights([ranked[0].cell])
+            # colour every suggested cell by value: equal gain -> same colour,
+            # weaker placements dim down a rank at a time.
+            best_by_cell: dict[tuple[int, int], float] = {}
+            for s in ranked:
+                g = round(s.gain, 3)
+                if s.cell not in best_by_cell or g > best_by_cell[s.cell]:
+                    best_by_cell[s.cell] = g
+            distinct = sorted(set(best_by_cell.values()), reverse=True)
+            rank_of = {g: i for i, g in enumerate(distinct)}
+            self.grid.set_highlights({c: rank_of[g] for c, g in best_by_cell.items()})
             lines = [
                 f"{i + 1}. {s.note}  @ {cellname(s.cell)}  (+{s.gain:.1f})"
                 for i, s in enumerate(ranked)
