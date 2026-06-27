@@ -111,8 +111,8 @@ def load_layout() -> tuple[Temple | None, str, list[str]]:
 
 def build_editor():
     """Construct the editor widget (imports PySide6 lazily). Returns the widget."""
-    from PySide6.QtCore import QRectF, Qt, Signal
-    from PySide6.QtGui import QColor, QFont, QPainter, QPen
+    from PySide6.QtCore import QPointF, QRectF, Qt, Signal
+    from PySide6.QtGui import QColor, QFont, QPainter, QPen, QPolygonF
     from PySide6.QtWidgets import (
         QComboBox,
         QHBoxLayout,
@@ -247,6 +247,21 @@ def build_editor():
                     if rid and rid != "path" and is_volatile(ROOMS[rid]):
                         p.setPen(QColor("#d04ad0"))  # one-use: consumed on completion
                         p.drawRect(r.adjusted(3, 3, -3, -3))
+                        # destabilisation warning: a ⚠ triangle in the top-right
+                        # corner so the user spots rooms that destabilise on use.
+                        ax, top = r.right() - 13, r.top() + 4
+                        tri = QPolygonF([
+                            QPointF(ax, top),
+                            QPointF(ax - 9, top + 15),
+                            QPointF(ax + 9, top + 15),
+                        ])
+                        p.setPen(Qt.NoPen)
+                        p.setBrush(QColor("#e8b020"))
+                        p.drawPolygon(tri)
+                        p.setBrush(Qt.NoBrush)
+                        p.setPen(QPen(QColor(35, 22, 0), 1))
+                        p.drawLine(QPointF(ax, top + 5), QPointF(ax, top + 10))
+                        p.drawPoint(QPointF(ax, top + 12))
                     if c in self._disconnected:  # dashed cyan = needs a road to connect
                         p.setPen(QPen(QColor("#5fd0e0"), 1, Qt.DashLine))
                         p.drawRect(r.adjusted(2, 2, -2, -2))
@@ -344,11 +359,20 @@ def build_editor():
             left.addWidget(remove_med)
             left.addWidget(clear_med)
             left.addWidget(suggest_btn)
+            legend = QLabel(
+                "Markers:  ⚠ amber = destabilises on use (avoid / mind its effect)   ·   "
+                "orange = deletable loose end   ·   cyan dashed = not connected to entrance   ·   "
+                "gold = suggested placement"
+            )
+            legend.setWordWrap(True)
+            legend.setStyleSheet("color: #9b927d;")
+
             row = QHBoxLayout(self)
             row.addLayout(left)
             grid_col = QVBoxLayout()
             grid_col.addWidget(self.grid)
             grid_col.addWidget(self.status)
+            grid_col.addWidget(legend)
             grid_col.addWidget(self.suggestions)
             row.addLayout(grid_col)
 
@@ -472,7 +496,7 @@ def build_editor():
             self.status.setText(
                 f"Rooms: {len(tiers)}   Tier 3: {t3}   "
                 f"Loose ends (deletable): {removable}   "
-                f"One-use: {volatile}   Disconnected: {disconnected}   Violations: {viol}"
+                f"Destabilising: {volatile}   Disconnected: {disconnected}   Violations: {viol}"
             )
 
     return TempleEditor()

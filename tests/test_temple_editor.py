@@ -145,6 +145,7 @@ def test_editor_marks_rooms_disconnected_from_entrance():
     assert w.grid._disconnected == {(0, 0)}         # the vault is NOT flagged
     assert (4, 7) not in w.grid._disconnected
     assert "Disconnected: 1" in w.status.text()
+    assert "Destabilising: 1" in w.status.text()    # the vault destabilises on use
 
 
 def test_cellname_is_one_indexed_col_row():
