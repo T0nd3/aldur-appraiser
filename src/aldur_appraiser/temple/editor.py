@@ -54,6 +54,7 @@ def build_editor():
             self._hover: tuple[int, int] | None = None
             self._tiers: dict[tuple[int, int], int] = {}
             self._violation_cells: set[tuple[int, int]] = set()
+            self._restricted: set[tuple[int, int]] = set()
             self._highlights: set[tuple[int, int]] = set()
             self.setMouseTracking(True)
             self.setFixedSize(self.cell * temple.size, self.cell * temple.size)
@@ -73,6 +74,7 @@ def build_editor():
             self._violation_cells = {
                 c for pair in self.temple.connection_violations() for c in pair
             }
+            self._restricted = self.temple.restricted_room_cells()
             self.update()
 
         def _cell_at(self, x: int, y: int) -> tuple[int, int] | None:
@@ -138,12 +140,13 @@ def build_editor():
                         p.setFont(self._font)
                         tier = self._tiers.get(c, 1)
                         p.drawText(r, Qt.AlignCenter, f"{abbrev(rid)}\n{'I' * tier}")
+                    if c in self._restricted:  # always destabilises on exit
+                        p.setPen(QColor("#e08a2a"))
+                        p.drawRect(r.adjusted(3, 3, -3, -3))
                     if c in self._highlights:
-                        pen = p.pen()
                         p.setPen(QColor("#ffd24a"))
                         p.drawRect(r.adjusted(2, 2, -2, -2))
                         p.drawRect(r.adjusted(4, 4, -4, -4))
-                        p.setPen(pen)
             p.end()
 
     class TempleEditor(QWidget):
@@ -251,8 +254,10 @@ def build_editor():
             tiers = self.temple.tiers()
             t3 = sum(1 for v in tiers.values() if v == 3)
             viol = len(self.temple.connection_violations())
+            restricted = len(self.temple.restricted_room_cells())
             self.status.setText(
-                f"Rooms: {len(tiers)}   Tier 3: {t3}   Violations: {viol}"
+                f"Rooms: {len(tiers)}   Tier 3: {t3}   "
+                f"Restricted (lost on exit): {restricted}   Violations: {viol}"
             )
 
     return TempleEditor()

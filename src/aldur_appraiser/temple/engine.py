@@ -80,11 +80,12 @@ class Temple:
 
     # --- connectivity / accessibility ---------------------------------------
 
-    def accessible_cells(self) -> set[Cell]:
+    def accessible_cells(self, *, ignore: Cell | None = None) -> set[Cell]:
         """Occupied cells reachable from the entrance over 4-adjacent occupied
-        cells. (Valid in-game states are fully connected; this still drives the
-        Generator's road-connection rule and editor connectivity checks.)"""
-        occupied = set(self.cells)
+        cells. `ignore` removes a cell first (used to test what a removal would
+        orphan). Drives the Generator's road-connection rule and the restricted
+        (articulation) check."""
+        occupied = {c for c in self.cells if c != ignore}
         if not occupied:
             return set()
         # Seed: occupied cells adjacent to (or at) the entrance.
@@ -103,6 +104,22 @@ class Temple:
     def accessible_room_cells(self) -> set[Cell]:
         acc = self.accessible_cells()
         return {c for c in acc if self.is_room(c)}
+
+    def restricted_room_cells(self) -> set[Cell]:
+        """Restricted rooms = accessible rooms whose removal would orphan another
+        room from the entrance (articulation points). The game always destabilises
+        these on exit, so a valuable room you want to keep must NOT be one — build
+        a redundant path (a loop) around it so it stops being the sole connection.
+        (You can't *place* an orphan; this is about what a later removal strands.)"""
+        base = self.accessible_room_cells()
+        if not base:
+            return set()
+        restricted: set[Cell] = set()
+        for c in self.room_cells():
+            after = {rc for rc in self.accessible_cells(ignore=c) if self.is_room(rc)}
+            if (base - {c}) - after:  # some other room lost access -> c is restricted
+                restricted.add(c)
+        return restricted
 
     # --- conversions ---------------------------------------------------------
 

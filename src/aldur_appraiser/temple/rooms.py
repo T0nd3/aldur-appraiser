@@ -118,9 +118,16 @@ ROOMS: dict[str, Room] = {
         id="flesh_surgeon", name="Flesh Surgeon's Ward", category="production",
         bonus="Unique Monsters have increased Effectiveness; Limb Modification; "
               "T3 Transcension Device",
-        aka=("Prosthetic Research",),
         upgraded_by=(_u("synthflesh_lab", {2: 1}),),
-        notes=("A Synthflesh Lab powered by a Generator upgrades it to T3.",),
+        notes=(
+            "A Synthflesh Lab powered by a Generator upgrades it to T3.",
+            "Upgrades an adjacent Prosthetic Research room.",
+        ),
+    ),
+    "prosthetic_research": Room(
+        id="prosthetic_research", name="Prosthetic Research", category="production",
+        bonus="(VERIFY effect) — its own room card, upgraded by an adjacent Flesh Surgeon",
+        upgraded_by=(_u("flesh_surgeon"),),
     ),
     # --- generator -----------------------------------------------------------
     "generator": Room(

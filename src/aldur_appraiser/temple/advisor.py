@@ -20,6 +20,10 @@ from aldur_appraiser.temple.engine import Cell, Temple
 from aldur_appraiser.temple.rooms import ROOMS
 
 VIOLATION_PENALTY = 5.0
+# A restricted (articulation) room always destabilises on exit, so its value is
+# discounted — this nudges the advisor to add redundant paths that de-restrict a
+# valuable room rather than leave it as a sole connection.
+RESTRICTED_DISCOUNT = 0.6
 
 
 @dataclass
@@ -35,9 +39,13 @@ class Suggestion:
 def score(temple: Temple, values: dict[str, float] | None = None) -> float:
     """A single number for the whole temple: sum of value*tier, less violations."""
     values = values or {}
+    restricted = temple.restricted_room_cells()
     total = 0.0
     for c, tier in temple.tiers().items():
-        total += values.get(temple.effective_room_id(c), 1.0) * tier
+        worth = values.get(temple.effective_room_id(c), 1.0) * tier
+        if c in restricted:
+            worth *= 1.0 - RESTRICTED_DISCOUNT
+        total += worth
     total -= VIOLATION_PENALTY * len(temple.connection_violations())
     return total
 

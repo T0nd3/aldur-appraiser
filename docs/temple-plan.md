@@ -26,15 +26,17 @@ minimising rooms lost to destabilisation.
 - **Destabilisation:** each entry 2–3 random tiles destabilise (removed
   permanently on exit). **Accessible "Restricted" rooms always destabilise.**
   Defeating Architect/Atziri → greater destabilisation.
-- **The game never allows orphaned rooms** — you cannot place a room that would
-  be (or leave anything) disconnected. So there is NO articulation/orphan risk to
-  model; removed the engine logic that flagged it.
-- **"Restricted" = a fixed room category**, not topological. Best current read:
-  the Architect special reward rooms (Currency/Uniques/… Vaults) that are
-  consumed/destroyed after completion (`architect_room=True`). VERIFY.
-- **Objective:** maximise **high-tier valuable** rooms (the upgrade graph). Few
-  rooms-removed is mostly about NOT fighting the Architect/Atziri (greater
-  destabilisation) plus the uncontrollable random 2–3 tiles.
+- You **cannot place** a room that would be orphaned (placement always stays
+  connected) — but **"Restricted" IS topological** (confirmed): a room whose
+  removal would orphan rooms behind it (an articulation point) is Restricted and
+  ALWAYS destabilises when accessible. So building a **redundant path / loop**
+  around a valuable room makes it non-restricted → it survives. Modelled in the
+  engine (`restricted_room_cells`) and discounted in the advisor score.
+  (The Architect special reward rooms also destabilise after completion — a
+  separate `architect_room` flag.)
+- **Objective:** maximise high-tier valuable rooms (the upgrade graph) AND keep
+  them non-restricted (so they aren't force-destabilised); plus avoid fighting
+  the Architect/Atziri (greater destabilisation) and the random 2–3 tiles.
 
 ## Data model — BUILT (`src/aldur_appraiser/temple/rooms.py`)
 - `Room` dataclass: `id, name, category, bonus, generator, fixed_tier,
@@ -46,24 +48,29 @@ minimising rooms lost to destabilisation.
 
 ## Open VERIFY items (don't block the engine)
 1. **Card/display-name mappings:** Barracks=Garrison, Depot=Armoury,
-   Dynamo=Generator, **Prosthetic Research=Flesh Surgeon? (guessed)**.
-2. **Per-tier upgrade COUNTS** where the table is silent (Armoury, Golem,
-   Corruption, …) — currently assumed **1 adjacent → T2, 2 → T3**.
-3. **Exact per-tier % numbers** (value display only; not needed for structure).
-4. Confirm **"Restricted" rooms** = the Architect special reward rooms (current
-   assumption) vs some other fixed category.
-5. Which rooms count as **"valuable"** for the objective/advisor weighting
-   (likely user-configurable).
+   Dynamo=Generator. (RESOLVED: Prosthetic Research is its OWN room, upgraded by
+   an adjacent Flesh Surgeon.)
+2. **Per-tier upgrade COUNTS** where the table is silent (Armoury, Smithy,
+   Generator, Thaumaturge, Corruption, …) — assumed **1 adjacent → T2, 2 → T3**.
+   Confirmed: Commander 2/3 Garrison, Alchemy 1/2 Thaumaturge, Golem 2 Generators
+   for T3. Still need the rest from in-game "Hold Alt".
+3. **Source-tier requirements** not yet modelled (e.g. Thaumaturge needs a T2+
+   Sacrificial Chamber; Flesh Surgeon T3 needs a Generator-powered Synthflesh).
+4. **Exact per-tier % numbers** (value display only; not needed for structure).
+5. **"Restricted"** RESOLVED: topological articulation points (engine models it).
+6. Which rooms count as **"valuable"** for the objective/advisor weighting
+   (likely user-configurable) + the Prosthetic Research effect.
 
 ## Phases & status
 - [x] **Phase 1a — Room dataset + schema** — 24 rooms from the authoritative
   source; VERIFY items above are refinements only.
   (`temple/rooms.py`, `tests/test_temple_rooms.py`, 5 tests)
-- [x] **Phase 1b — Rules engine** — `temple/engine.py` (+ `tests/test_temple_engine.py`,
-  10 tests). 9×9 grid, placement, accessibility BFS from the entrance, generator
-  Manhattan power radius (needs network connection), adjacency tier computation,
-  Garrison conversions, cannot-connect violation checks. Offline, no % numbers
-  needed. (Orphan/articulation logic removed — the game never allows orphans.)
+- [x] **Phase 1b — Rules engine** — `temple/engine.py` (+ `tests/test_temple_engine.py`).
+  9×9 grid, placement, accessibility BFS from the entrance, generator Manhattan
+  power radius (needs network connection), adjacency tier computation, Garrison
+  conversions, cannot-connect violation checks, and `restricted_room_cells`
+  (articulation points = always destabilised; a redundant loop clears them).
+  Offline, no % numbers needed.
 - [x] **Phase 2 — Interactive editor (Qt)** — `temple/editor.py` (+ headless
   smoke test `tests/test_temple_editor.py`). 9×9 painter grid, room palette
   (left-click place / right-click erase), category colours, live tiers, hovered
