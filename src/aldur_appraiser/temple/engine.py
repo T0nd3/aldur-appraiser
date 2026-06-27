@@ -41,11 +41,16 @@ class Temple:
     blocked: set[Cell] = field(default_factory=set)
     # (x, y) -> room id (an id in ROOMS, including "path")
     cells: dict[Cell, str] = field(default_factory=dict)
+    # (x, y) -> tier, for rooms whose tier comes from a player action (sacrifice /
+    # assassinate) and so can't be derived from the layout (manual_tier rooms).
+    tier_overrides: dict[Cell, int] = field(default_factory=dict)
 
     # --- grid basics ---------------------------------------------------------
 
     def copy(self) -> "Temple":
-        return Temple(self.size, self.entrance, set(self.blocked), dict(self.cells))
+        t = Temple(self.size, self.entrance, set(self.blocked), dict(self.cells))
+        t.tier_overrides = dict(self.tier_overrides)
+        return t
 
     def in_bounds(self, c: Cell) -> bool:
         return 0 <= c[0] < self.size and 0 <= c[1] < self.size
@@ -67,6 +72,7 @@ class Temple:
 
     def remove(self, c: Cell) -> None:
         self.cells.pop(c, None)
+        self.tier_overrides.pop(c, None)
 
     def is_path(self, c: Cell) -> bool:
         return self.cells.get(c) == "path"
@@ -175,6 +181,8 @@ class Temple:
         room = ROOMS[rid]
         if room.fixed_tier is not None:
             return room.fixed_tier
+        if room.manual_tier:  # tier set by a player action, not the layout
+            return self.tier_overrides.get(c, 1)
         if gen_tiers is None:
             gen_tiers = self._generator_tiers()
         if accessible is None:

@@ -50,6 +50,8 @@ class Room:
     fixed_tier: int | None = None        # rooms that can't be upgraded (e.g. Vault)
     architect_room: bool = False         # unlocked via Architect; destabilises on complete
     volatile: bool = False               # destabilises (is consumed) once opened/completed
+    manual_tier: bool = False            # tier comes from a player action (sacrifice /
+    #                                      assassinate), not the layout -> set by hand
     upgraded_by: tuple[UpgradeRule, ...] = ()
     cannot_connect: tuple[str, ...] = ()
     converts: tuple[str, ...] = ()       # "<from>-><to>" conversions this room triggers
@@ -180,6 +182,7 @@ ROOMS: dict[str, Room] = {
         id="sacrificial_chamber", name="Sacrificial Chamber", category="ritual",
         bonus="increased number of Rare Chests; T3 Morphology Mechanism "
               "(-> Vaal Cultivation Orb)",
+        manual_tier=True,
         notes=(
             "Upgraded by SACRIFICING other placed rooms (irreversible), not by "
             "adjacency. Upgrades adjacent Generator/Thaumaturge/Corruption Chamber.",
@@ -202,6 +205,7 @@ ROOMS: dict[str, Room] = {
         id="spymaster", name="Spymaster's Study", category="utility",
         bonus="increased Effect of Temple Mods from Garrisons/Commanders/"
               "Armouries/Smithies/Legion Barracks; High chance for a Lock Medallion",
+        manual_tier=True,
         cannot_connect=("commander", "synthflesh_lab"),
         converts=("garrison->legion_barracks",),
         notes=("Upgraded by assassinating other Spymasters, not by adjacency.",),

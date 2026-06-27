@@ -36,6 +36,7 @@ def build_editor():
     from PySide6.QtCore import QRectF, Qt, Signal
     from PySide6.QtGui import QColor, QFont, QPainter
     from PySide6.QtWidgets import (
+        QComboBox,
         QHBoxLayout,
         QLabel,
         QListWidget,
@@ -171,6 +172,10 @@ def build_editor():
 
             clear = QPushButton("Clear grid")
             clear.clicked.connect(self._clear)
+            # tier picker for rooms upgraded by a player action (sacrifice/assassinate)
+            self.tier_select = QComboBox()
+            for t in (1, 2, 3):
+                self.tier_select.addItem(f"Tier {t}", t)
             self.status = QLabel()
 
             # --- per-run advisor: a hand of drawn cards + suggestions ----------
@@ -188,6 +193,8 @@ def build_editor():
             left = QVBoxLayout()
             left.addWidget(QLabel("Room (left-click place · right-click erase)"))
             left.addWidget(self.palette, 1)
+            left.addWidget(QLabel("Tier for sacrifice/assassinate rooms"))
+            left.addWidget(self.tier_select)
             left.addWidget(clear)
             left.addWidget(QLabel("Hand (drawn cards this run)"))
             left.addWidget(self.hand_list, 1)
@@ -244,6 +251,8 @@ def build_editor():
             if not erase and cell not in self.temple.blocked:
                 try:
                     self.temple.place(cell, self.brush)
+                    if ROOMS[self.brush].manual_tier:
+                        self.temple.tier_overrides[cell] = self.tier_select.currentData()
                 except ValueError:
                     pass
             self._refresh()

@@ -58,6 +58,9 @@ minimising rooms lost to destabilisation.
    for T3. Still need the rest from in-game "Hold Alt".
 3. **Source-tier requirements** not yet modelled (e.g. Thaumaturge needs a T2+
    Sacrificial Chamber; Flesh Surgeon T3 needs a Generator-powered Synthflesh).
+   (Sacrifice/assassinate rooms — Sacrificial Chamber, Spymaster — carry a
+   `manual_tier` flag and get their tier from a per-cell override in the editor,
+   since it can't be derived from the layout.)
 3b. **Group/category upgrade counts** not yet modelled: Hold-Alt showed the
    Commander is upgraded by *any* adjacent barrack (Garrison/Legion/Transcendent),
    so its 2/3 count almost certainly SUMS across barrack types — the engine counts

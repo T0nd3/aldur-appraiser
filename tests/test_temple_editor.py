@@ -51,3 +51,16 @@ def test_editor_advisor_highlights_best_cell():
     w._suggest()
     assert w.grid._highlights == {(4, 4)}
 
+
+def test_editor_applies_tier_override_to_manual_room():
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import QApplication
+
+    _app = QApplication.instance() or QApplication([])
+    w = build_editor()
+    w.tier_select.setCurrentIndex(2)            # Tier 3
+    w.brush = "spymaster"
+    w._on_cell((2, 2), int(Qt.LeftButton.value))
+    assert w.temple.tier_overrides[(2, 2)] == 3
+    assert w.temple.room_tier((2, 2)) == 3
+

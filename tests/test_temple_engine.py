@@ -87,6 +87,26 @@ def test_restricted_room_detected_and_loop_clears_it():
     assert (0, 1) not in t.restricted_room_cells()
 
 
+# --- manual tier override (sacrifice / assassinate rooms) --------------------
+
+
+def test_manual_tier_override_for_sacrifice_room():
+    t = _temple()
+    t.place((4, 4), "sacrificial_chamber")
+    assert t.room_tier((4, 4)) == 1            # default until set
+    t.tier_overrides[(4, 4)] = 3
+    assert t.room_tier((4, 4)) == 3
+    t.remove((4, 4))                           # removal drops the override
+    assert (4, 4) not in t.tier_overrides
+
+
+def test_override_ignored_for_layout_upgraded_room():
+    t = _temple()
+    t.place((4, 4), "commander")               # not a manual_tier room
+    t.tier_overrides[(4, 4)] = 3
+    assert t.room_tier((4, 4)) == 1            # override ignored; no adjacent garrisons
+
+
 # --- conversions -------------------------------------------------------------
 
 
