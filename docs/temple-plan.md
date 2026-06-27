@@ -63,8 +63,11 @@ minimising rooms lost to destabilisation.
    so its 2/3 count almost certainly SUMS across barrack types — the engine counts
    per-room-type today. Needs an UpgradeRule that can match a category/group.
    Hold-Alt verified so far: Generator, Thaumaturge, Synthflesh Lab, Smithy,
-   Transcendent Barracks. Tier %: Garrison T2 12/T3 20, Armoury T1 10/T3 60,
-   Smithy T2 30, Thaumaturge T1 8/T2 15, Synthflesh T1 10/T2 20, Transcendent T3 35.
+   Transcendent Barracks, Sacrificial Chamber. Only Spymaster's Study is still
+   fully unseen. Tier %: Garrison T2 12/T3 20, Armoury T1 10/T3 60, Smithy T2 30,
+   Thaumaturge T1 8/T2 15/T3 22, Synthflesh T1 10/T2 20, Transcendent T3 35.
+   Note: high-tier ritual rooms (Thaumaturge/Sacrificial/Alchemy/Corruption) hold
+   a one-use "device" that destabilises the room when used (optional).
 4. **Exact per-tier % numbers** (value display only; not needed for structure).
 5. **"Restricted"** RESOLVED: topological articulation points (engine models it).
 6. Which rooms count as **"valuable"** for the objective/advisor weighting

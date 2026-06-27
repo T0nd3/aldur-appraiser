@@ -156,9 +156,13 @@ ROOMS: dict[str, Room] = {
     "thaumaturge": Room(
         id="thaumaturge", name="Thaumaturge's Laboratory", category="ritual",
         bonus="increased Effect of Temple Mods from Corruption Chambers/Treasure "
-              "Vaults/Sacrificial Chambers (T1 8% / T2 15%); adds Quadrilla Sergeant",
+              "Vaults/Sacrificial Chambers (T1 8% / T2 15% / T3 22%); "
+              "adds Quadrilla Sergeant",
         upgraded_by=(_u("sacrificial_chamber"),),
-        notes=("Upgraded by an adjacent Sacrificial Chamber of Tier 2 or 3.",),
+        notes=(
+            "Upgraded by an adjacent Sacrificial Chamber of Tier 2 or 3.",
+            "T3 holds a Gem Corrupter device; using it destabilises the room (one-use).",
+        ),
     ),
     "alchemy_lab": Room(
         id="alchemy_lab", name="Alchemy Lab", category="ritual",
@@ -176,8 +180,11 @@ ROOMS: dict[str, Room] = {
         id="sacrificial_chamber", name="Sacrificial Chamber", category="ritual",
         bonus="increased number of Rare Chests; T3 Morphology Mechanism "
               "(-> Vaal Cultivation Orb)",
-        notes=("Upgraded by SACRIFICING other placed rooms (irreversible), not by "
-               "adjacency.",),
+        notes=(
+            "Upgraded by SACRIFICING other placed rooms (irreversible), not by "
+            "adjacency. Upgrades adjacent Generator/Thaumaturge/Corruption Chamber.",
+            "Holds a Morphology Mechanism device; using it destabilises the room.",
+        ),
     ),
     "treasure_vault": Room(
         id="treasure_vault", name="Treasure Vault", category="ritual",
