@@ -52,34 +52,22 @@ minimising rooms lost to destabilisation.
 1. **Card/display-name mappings (RESOLVED via Hold-Alt):** Barracks=Garrison,
    Depot=Armoury, Dynamo=Generator, Thaumaturge's Laboratory=Thaumaturge,
    **Prosthetic Research=Synthflesh Lab** (a card name, NOT a separate room).
-2. **Per-tier upgrade COUNTS** where the table is silent (Armoury, Smithy,
-   Generator, Thaumaturge, Corruption, …) — assumed **1 adjacent → T2, 2 → T3**.
-   Confirmed: Commander 2/3 Garrison, Alchemy 1/2 Thaumaturge, Golem 2 Generators
-   for T3. Still need the rest from in-game "Hold Alt".
-3. **Source-tier requirements** not yet modelled (e.g. Thaumaturge needs a T2+
-   Sacrificial Chamber; Flesh Surgeon T3 needs a Generator-powered Synthflesh).
-   (Sacrifice/assassinate rooms — Sacrificial Chamber, Spymaster — carry a
-   `manual_tier` flag and get their tier from a per-cell override in the editor,
-   since it can't be derived from the layout.)
-3b. **Group/category upgrade counts** not yet modelled: Hold-Alt showed the
-   Commander is upgraded by *any* adjacent barrack (Garrison/Legion/Transcendent),
-   so its 2/3 count almost certainly SUMS across barrack types — the engine counts
-   per-room-type today. Needs an UpgradeRule that can match a category/group.
-   Hold-Alt verified: Generator, Thaumaturge, Synthflesh Lab, Smithy, Transcendent
-   Barracks, Sacrificial Chamber, Golem Works, Commander, Flesh Surgeon, Alchemy
-   Lab, Garrison, Corruption Chamber. Garrison packs 8/12/16, normal -/10/13;
-   Alchemy T2 25. Remaining unseen: Armoury, Legion Barracks, Spymaster — all
-   inverse-confirmed. Commander is upgraded by
-   adjacent Garrison OR Transcendent Barracks (NOT Legion) and upgrades adjacent
-   Garrisons in turn. Tier %: Garrison T2 12/T3 20, Armoury T1 10/T3 60, Smithy T2
-   30, Golem Works T2 15, Commander T1 10, Thaumaturge T1 8/T2 15/T3 22, Synthflesh
-   T1 10/T2 20, Transcendent T3 35.
+2. **Upgrade rules — RESOLVED (ported from Tetriszocker ROOM_DATA):** group
+   `count` (sum across a list of source types), `require_all` (one of EACH type),
+   and `source_min_tier`. So e.g. Commander = 2/3 adjacent {Garrison, Transcendent}
+   together; Garrison/Armoury/Generator T3 need both of their pair; Flesh Surgeon
+   T3 needs a T2+ Synthflesh. Engine resolves tiers to a fixed point.
+   Hold-Alt verified rooms (12): Generator, Thaumaturge, Synthflesh, Smithy,
+   Transcendent Barracks, Sacrificial Chamber, Golem Works, Commander, Flesh
+   Surgeon, Alchemy Lab, Garrison, Corruption Chamber. Unseen (inverse-confirmed):
+   Armoury, Legion Barracks, Spymaster.
    IMPORTANT correction: mobalytics had the Spymaster and Golem Works "effect of
-   Temple Mods from …" lists SWAPPED. The in-game graph + Hold-Alt are authoritative
-   (Golem Works ← Garrison/Commander/Armoury/Smithy/Legion; Spymaster ← Generator/
-   Synthflesh/Flesh Surgeon/Transcendent/Alchemy).
-   Note: high-tier ritual rooms (Thaumaturge/Sacrificial/Alchemy/Corruption) hold
-   a one-use "device" that destabilises the room when used (optional).
+   Temple Mods from …" lists SWAPPED; corrected per in-game graph + Hold-Alt.
+3. **Generator power — RESOLVED:** powers directly adjacent rooms and conducts
+   along connected paths (within range 3/4/5 by tier) to rooms beside them; must
+   be connected to a road. Sacrifice/assassinate rooms (Sacrificial Chamber,
+   Spymaster) carry `manual_tier` and get their tier from a per-cell override.
+   Note: high-tier ritual rooms hold a one-use device that destabilises the room.
 4. **Exact per-tier % numbers** (value display only; not needed for structure).
 5. **"Restricted Rooms" — RESOLVED:** the in-game Architect's Chamber confirms the
    game's "Restricted Rooms" are the Architect reward Vaults (= our `volatile`/

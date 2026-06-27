@@ -134,7 +134,8 @@ def build_editor():
                     if c == self.temple.entrance:
                         p.fillRect(r, QColor(124, 252, 138, 50))
                     # border (red if a cannot-connect violation)
-                    p.setPen(QColor("#d04a4a") if c in self._violation_cells else QColor(20, 18, 14))
+                    bad = c in self._violation_cells
+                    p.setPen(QColor("#d04a4a") if bad else QColor(20, 18, 14))
                     p.drawRect(r)
                     if rid and rid != "path":
                         p.setPen(QColor("#f0ead6"))

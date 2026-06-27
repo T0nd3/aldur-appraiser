@@ -6,13 +6,14 @@ advisor need:
   - connectivity & accessibility from the entrance (BFS over occupied cells) —
     used for the Generator's "must be connected to a road" rule and to let the
     editor keep placements connected (the game never allows orphaned rooms),
-  - room tier from adjacency to its upgrade sources (Generator upgrades use the
-    generator's Manhattan power radius + a network connection instead),
+  - room tier from its group upgrade rules (count / require_all / source_min_tier
+    over a list of source types; a "generator" source is satisfied by a Generator
+    *powering* the cell via the road network, not plain adjacency),
   - Garrison conversions (Spymaster -> Legion, Synthflesh -> Transcendent).
 
-Tier-combination semantics for rooms with several upgrade sources are a v1
-assumption (any single source meeting its per-tier count grants that tier); see
-docs/temple-plan.md VERIFY items.
+Tiers are resolved to a fixed point because they can depend on neighbours' tiers
+(Generator range, source_min_tier rules). Upgrade rules are ported from the
+Tetriszocker editor; see docs/temple-plan.md.
 """
 
 from __future__ import annotations
@@ -47,7 +48,7 @@ class Temple:
 
     # --- grid basics ---------------------------------------------------------
 
-    def copy(self) -> "Temple":
+    def copy(self) -> Temple:
         t = Temple(self.size, self.entrance, set(self.blocked), dict(self.cells))
         t.tier_overrides = dict(self.tier_overrides)
         return t
@@ -147,71 +148,94 @@ class Temple:
 
     # --- tiers ---------------------------------------------------------------
 
-    def _generator_tiers(self) -> dict[Cell, int]:
-        # Generators upgrade via adjacency only (Thaumaturge / Sacrificial), so
-        # they need no power info and can be resolved first.
-        return {c: self._adjacency_tier(c) for c in self.cells if self.cells[c] == "generator"}
+    def _generator_powering(self, cur: dict[Cell, int]) -> dict[Cell, set[Cell]]:
+        """room cell -> set of Generator cells powering it. A Generator on the road
+        network powers directly adjacent rooms and conducts along connected Path
+        cells up to its tier's range, powering rooms beside those powered paths."""
+        accessible = self.accessible_cells()
+        powering: dict[Cell, set[Cell]] = {}
+        gens = [c for c in self.cells if self.cells[c] == "generator"]
+        for g in gens:
+            if g not in accessible:
+                continue  # an unconnected Generator provides no power
+            rng = GEN_RADIUS.get(cur.get(g, 1), 0)
+            reached: set[Cell] = {n for n in self.neighbors4(g) if self.is_room(n)}
+            seen = {g}
+            q: deque[tuple[Cell, int]] = deque()
+            for p in self.neighbors4(g):
+                if self.is_path(p):
+                    seen.add(p)
+                    q.append((p, 1))
+            while q:
+                cell, d = q.popleft()
+                for n in self.neighbors4(cell):
+                    if n in seen:
+                        continue
+                    if self.is_room(n):
+                        reached.add(n)
+                    elif self.is_path(n) and d < rng:
+                        seen.add(n)
+                        q.append((n, d + 1))
+            for r in reached:
+                powering.setdefault(r, set()).add(g)
+        return powering
 
-    def _adjacency_tier(self, c: Cell) -> int:
-        room = ROOMS[self.effective_room_id(c)]
-        if room.fixed_tier is not None:
-            return room.fixed_tier
-        tier = 1
-        for rule in room.upgraded_by:
-            if rule.source == "generator":
-                continue  # handled via power radius elsewhere
-            count = sum(
-                1 for n in self.neighbors4(c) if self.effective_room_id(n) == rule.source
-            )
-            for t in (3, 2):
-                if count >= rule.counts.get(t, 1 << 30):
-                    tier = max(tier, t)
-                    break
-        return min(tier, 3)
-
-    def generators_powering(self, c: Cell, gen_tiers: dict[Cell, int], accessible: set[Cell]):
-        """Generators that power cell `c`: accessible (connected to the network/
-        road) and within their tier's Manhattan radius."""
-        out = []
-        for g, gt in gen_tiers.items():
-            if g in accessible and manhattan(g, c) <= GEN_RADIUS.get(gt, 0):
-                out.append(g)
-        return out
-
-    def room_tier(self, c: Cell, gen_tiers=None, accessible=None) -> int:
-        rid = self.effective_room_id(c)
-        room = ROOMS[rid]
-        if room.fixed_tier is not None:
-            return room.fixed_tier
-        if room.manual_tier:  # tier set by a player action, not the layout
-            return self.tier_overrides.get(c, 1)
-        if gen_tiers is None:
-            gen_tiers = self._generator_tiers()
-        if accessible is None:
-            accessible = self.accessible_cells()
-        tier = 1
-        for rule in room.upgraded_by:
-            if rule.source == "generator":
-                count = len(self.generators_powering(c, gen_tiers, accessible))
-            else:
-                count = sum(
-                    1 for n in self.neighbors4(c) if self.effective_room_id(n) == rule.source
+    def _rule_satisfied(self, c: Cell, rule, cur, powering) -> bool:
+        def qualifying(source: str) -> int:
+            if source == "generator":
+                return sum(
+                    1 for g in powering.get(c, ()) if cur.get(g, 1) >= rule.source_min_tier
                 )
-            for t in (3, 2):
-                if count >= rule.counts.get(t, 1 << 30):
-                    tier = max(tier, t)
-                    break
+            return sum(
+                1
+                for n in self.neighbors4(c)
+                if self.is_room(n)
+                and self.effective_room_id(n) == source
+                and cur.get(n, 1) >= rule.source_min_tier
+            )
+
+        if rule.require_all:
+            return all(qualifying(s) >= 1 for s in rule.sources)
+        return sum(qualifying(s) for s in rule.sources) >= rule.count
+
+    def _compute_tier(self, c: Cell, room, cur, powering) -> int:
+        tier = 1
+        for rule in room.upgraded_by:
+            if self._rule_satisfied(c, rule, cur, powering):
+                tier = max(tier, rule.tier)
         return min(tier, 3)
 
     def tiers(self) -> dict[Cell, int]:
-        """Tier of every placed room (paths excluded)."""
-        gen_tiers = self._generator_tiers()
-        accessible = self.accessible_cells()
-        return {
-            c: self.room_tier(c, gen_tiers, accessible)
-            for c in self.cells
-            if self.is_room(c)
-        }
+        """Tier of every placed room (paths excluded).
+
+        Iterated to a fixed point because tiers can depend on neighbours' tiers
+        (Generator power range; `source_min_tier` rules like Flesh Surgeon needing
+        a T2+ Synthflesh). Tiers only rise and are capped at 3, so it converges in
+        a few passes."""
+        rooms = self.room_cells()
+        cur: dict[Cell, int] = {}
+        for c in rooms:
+            room = ROOMS[self.effective_room_id(c)]
+            if room.fixed_tier is not None:
+                cur[c] = room.fixed_tier
+            elif room.manual_tier:
+                cur[c] = self.tier_overrides.get(c, 1)
+            else:
+                cur[c] = 1
+        for _ in range(6):
+            powering = self._generator_powering(cur)
+            new = dict(cur)
+            for c in rooms:
+                room = ROOMS[self.effective_room_id(c)]
+                if room.fixed_tier is None and not room.manual_tier:
+                    new[c] = self._compute_tier(c, room, cur, powering)
+            if new == cur:
+                break
+            cur = new
+        return cur
+
+    def room_tier(self, c: Cell) -> int:
+        return self.tiers().get(c, 1)
 
     # --- rule checks ---------------------------------------------------------
 

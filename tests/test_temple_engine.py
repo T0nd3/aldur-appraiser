@@ -22,6 +22,37 @@ def test_commander_tier_scales_with_adjacent_garrisons():
     assert t.room_tier((4, 4)) == 3  # 3 -> T3
 
 
+def test_garrison_t3_requires_both_commander_and_armoury():
+    # require_all: 1 barrack-line upgrader -> T2, but T3 needs Commander AND Armoury
+    t = _temple()
+    t.place((4, 4), "garrison")
+    t.place((5, 4), "commander")
+    assert t.room_tier((4, 4)) == 2
+    t.place((3, 4), "armoury")
+    assert t.room_tier((4, 4)) == 3
+
+
+def test_smithy_counts_golem_and_generator_together():
+    # group sum: a Generator (power) + a Golem Works count as 2 toward Smithy T3
+    t = _temple(entrance=(0, 0))
+    t.place((0, 0), "generator")        # powers adjacent
+    t.place((1, 0), "smithy")
+    assert t.room_tier((1, 0)) == 2     # 1 source (generator)
+    t.place((1, 1), "golem_works")
+    assert t.room_tier((1, 0)) == 3     # 2 sources (generator + golem)
+
+
+def test_generator_conducts_power_along_paths():
+    # a Generator powers rooms beside paths it feeds (within range), not just
+    # directly-adjacent ones
+    t = _temple(entrance=(0, 0))
+    t.place((0, 0), "generator")
+    t.place((1, 0), "path")
+    t.place((2, 0), "path")             # 2 path-steps from the generator (range 3)
+    t.place((2, 1), "smithy")           # beside the powered path
+    assert t.room_tier((2, 1)) == 2
+
+
 def test_fixed_tier_room_never_upgrades():
     t = _temple()
     t.place((4, 4), "treasure_vault")

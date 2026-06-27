@@ -1,44 +1,55 @@
 """Temple room dataset + schema (PoE2 Vaal Temple).
 
-The upgrade graph is sourced from the mobalytics Vaal Temple guide
-(Room | Bonus | Upgraded-By-Adjacent | converts-to table) plus the in-game room
-graph and tooltips. It's the foundation everything else builds on, so it's plain
-data with a typed schema and a validator.
+The upgrade rules are ported from the Tetriszocker editor's ROOM_DATA (group
+`count` / `require_all` / `min_tier`), cross-checked against the in-game Hold-Alt
+tooltips and the mobalytics guide. It's the foundation everything else builds on,
+so it's plain data with a typed schema and a validator.
 
-Confirmed by the player:
-  - Tier upgrades count ADJACENT rooms of the listed type(s) — except the
-    Generator/Dynamo, which powers rooms within a Manhattan radius (and must be
-    connected to a road/path).
+Confirmed by the player + Hold-Alt:
+  - Tier upgrades count qualifying ADJACENT rooms as a GROUP (e.g. Commander: 2/3
+    adjacent Garrison-or-Transcendent together); some T3s need one of EACH type
+    (`require_all`); some need a minimum source tier (Flesh Surgeon needs a T2+
+    Synthflesh). The Generator/Dynamo instead POWERS rooms (directly adjacent +
+    along connected paths within range), and must be connected to a road.
   - The game's "Restricted Rooms" are the Architect reward Vaults (flagged
     volatile/architect_room) — they always destabilise. A separate engine
     heuristic, chokepoint_room_cells(), flags articulation points (sole links) as
     a layout risk; that is NOT the game's "Restricted Rooms".
-
-Still VERIFY: the exact per-tier counts for upgraders the table doesn't spell
-out (assumed 1 adjacent -> T2, 2 -> T3) and the exact per-tier % numbers.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 CATEGORIES = {"barrack", "production", "ritual", "utility", "generator", "special", "path"}
 
-# Default per-tier adjacency counts where the source guide doesn't state them.
-_DEFAULT_COUNTS = {2: 1, 3: 2}  # VERIFY
-
 
 @dataclass(frozen=True)
-class UpgradeRule:
-    """A room's tier rises when enough adjacent `source` rooms are present.
+class Upgrade:
+    """One tier's upgrade condition (rules sourced from the Tetriszocker editor).
 
-    `counts` maps a target tier to the number of adjacent `source` rooms needed,
-    e.g. Commander: {2: 2, 3: 3} = 2 Garrisons for T2, 3 for T3. Sources without
-    explicit counts in the guide use _DEFAULT_COUNTS (marked VERIFY).
+    A room reaches `tier` when its qualifying adjacent rooms — ids in `sources`,
+    counted as a GROUP (summed across the listed types) — satisfy this rule:
+      - `count`: at least `count` adjacent rooms from `sources`, OR
+      - `require_all`: at least one adjacent room of EACH id in `sources`.
+    `source_min_tier` requires those neighbours to be at least that tier. A source
+    of "generator" is satisfied by a Generator *powering* the cell (road + range),
+    not by plain adjacency.
     """
 
-    source: str
-    counts: dict[int, int] = field(default_factory=lambda: dict(_DEFAULT_COUNTS))
+    tier: int
+    sources: tuple[str, ...]
+    count: int = 1
+    require_all: bool = False
+    source_min_tier: int = 1
+
+
+def _count(tier: int, sources, n: int = 1, *, min_tier: int = 1) -> Upgrade:
+    return Upgrade(tier, tuple(sources), count=n, source_min_tier=min_tier)
+
+
+def _all(tier: int, sources, *, min_tier: int = 1) -> Upgrade:
+    return Upgrade(tier, tuple(sources), require_all=True, source_min_tier=min_tier)
 
 
 @dataclass(frozen=True)
@@ -53,18 +64,14 @@ class Room:
     volatile: bool = False               # destabilises (is consumed) once opened/completed
     manual_tier: bool = False            # tier comes from a player action (sacrifice /
     #                                      assassinate), not the layout -> set by hand
-    upgraded_by: tuple[UpgradeRule, ...] = ()
+    upgraded_by: tuple[Upgrade, ...] = ()
     cannot_connect: tuple[str, ...] = ()
     converts: tuple[str, ...] = ()       # "<from>-><to>" conversions this room triggers
     aka: tuple[str, ...] = ()            # in-game card/tier display names (Barracks, Depot…)
     notes: tuple[str, ...] = ()
 
 
-def _u(source: str, counts: dict[int, int] | None = None) -> UpgradeRule:
-    return UpgradeRule(source, counts or dict(_DEFAULT_COUNTS))
-
-
-def is_volatile(room: "Room") -> bool:
+def is_volatile(room: Room) -> bool:
     """True if the room is consumed/destabilised once completed (Treasure Vault,
     Architect reward rooms) — placing it gives a one-time reward but it won't
     persist, so it's a poor pick for a lasting, re-runnable temple."""
@@ -80,7 +87,10 @@ ROOMS: dict[str, Room] = {
         aka=("Barracks", "Guardhouse"),
         # Hold-Alt "Upgraded by": Commander + Armoury raise its tier; Synthflesh and
         # Spymaster instead CONVERT it (Transcendent/Legion, handled via `converts`).
-        upgraded_by=(_u("commander"), _u("armoury")),
+        upgraded_by=(
+            _count(2, ["commander", "armoury"], 1),
+            _all(3, ["commander", "armoury"]),  # both Commander AND Armoury
+        ),
         converts=("garrison->transcendent_barracks", "garrison->legion_barracks"),
         notes=(
             "An adjacent Synthflesh Lab converts it to Transcendent Barracks, an "
@@ -90,16 +100,14 @@ ROOMS: dict[str, Room] = {
     "commander": Room(
         id="commander", name="Commander's Chamber", category="barrack",
         bonus="Rare Monsters have increased Effectiveness (T1 10%)",
-        upgraded_by=(
-            _u("garrison", {2: 2, 3: 3}),
-            _u("transcendent_barracks", {2: 2, 3: 3}),
+        upgraded_by=(  # adjacent barracks count together (Garrison + Transcendent)
+            _count(2, ["garrison", "transcendent_barracks"], 2),
+            _count(3, ["garrison", "transcendent_barracks"], 3),
         ),
         cannot_connect=("spymaster",),
         notes=(
             "Hold-Alt: upgraded by adjacent Garrison or Transcendent Barracks "
-            "(NOT Legion Barracks); the 2/3 count likely SUMS across the two "
-            "(engine counts per-type for now — needs a group upgrade rule).",
-            "Upgrades adjacent Garrisons in turn.",
+            "(NOT Legion); they count together. Upgrades adjacent Garrisons in turn.",
         ),
     ),
     "legion_barracks": Room(
@@ -110,7 +118,10 @@ ROOMS: dict[str, Room] = {
     "transcendent_barracks": Room(
         id="transcendent_barracks", name="Transcendent Barracks", category="barrack",
         bonus="more Magic Monsters (T3 35%)",
-        upgraded_by=(_u("generator"), _u("synthflesh_lab")),
+        upgraded_by=(  # VERIFY exact counts (Hold-Alt: Generator + Synthflesh)
+            _count(2, ["generator", "synthflesh_lab"], 1),
+            _count(3, ["generator", "synthflesh_lab"], 2),
+        ),
         notes=("Created when a Synthflesh Lab converts an adjacent Garrison.",),
     ),
     # --- production line -----------------------------------------------------
@@ -118,18 +129,24 @@ ROOMS: dict[str, Room] = {
         id="armoury", name="Armoury", category="production",
         bonus="Humanoid Monsters have increased Effectiveness; contains Equipment",
         aka=("Depot",),
-        upgraded_by=(_u("smithy"), _u("alchemy_lab")),
+        upgraded_by=(
+            _count(2, ["smithy", "alchemy_lab"], 1),
+            _all(3, ["smithy", "alchemy_lab"]),  # both Smithy AND Alchemy
+        ),
     ),
     "smithy": Room(
         id="smithy", name="Smithy", category="production",
         bonus="Chests have increased Item Rarity (T2 30%); Vaal Infuser",
-        upgraded_by=(_u("golem_works"), _u("generator")),
+        upgraded_by=(
+            _count(2, ["golem_works", "generator"], 1),
+            _count(3, ["golem_works", "generator"], 2),
+        ),
     ),
     "golem_works": Room(
         id="golem_works", name="Golem Works", category="production",
         bonus="increased Effect of Temple Mods from Garrisons/Commanders/"
               "Armouries/Smithies/Legion Barracks (T2 15%); adds High Priest",
-        upgraded_by=(_u("generator"),),
+        upgraded_by=(_count(2, ["generator"], 1), _count(3, ["generator"], 2)),
     ),
     "synthflesh_lab": Room(
         id="synthflesh_lab", name="Synthflesh Lab", category="production",
@@ -137,25 +154,36 @@ ROOMS: dict[str, Room] = {
         aka=("Prosthetic Research",),  # the card that places a Synthflesh Lab
         cannot_connect=("spymaster",),
         converts=("garrison->transcendent_barracks",),
-        upgraded_by=(_u("flesh_surgeon", {2: 1}), _u("generator", {3: 1})),
+        upgraded_by=(
+            _count(2, ["flesh_surgeon", "generator"], 1),
+            _count(3, ["flesh_surgeon", "generator"], 2),
+        ),
     ),
     "flesh_surgeon": Room(
         id="flesh_surgeon", name="Flesh Surgeon's Ward", category="production",
         bonus="Unique Monsters have increased Effectiveness (T1 10%); Limb "
               "Modification; T3 Transcension Device",
-        upgraded_by=(_u("synthflesh_lab", {2: 1}),),
-        notes=("A Synthflesh Lab powered by a Generator upgrades it to T3.",),
+        upgraded_by=(
+            _count(2, ["synthflesh_lab"], 1),
+            _count(3, ["synthflesh_lab"], 1, min_tier=2),  # needs a T2+ Synthflesh
+        ),
+        notes=("T3 needs an adjacent Tier-2+ Synthflesh Lab (e.g. one powered by "
+               "a Generator).",),
     ),
     # --- generator -----------------------------------------------------------
     "generator": Room(
         id="generator", name="Generator", category="generator", generator=True,
-        bonus="Construct Monsters have increased Effectiveness; adds Corrupted "
-              "Abomination; powers Smithy/Golem Works/Synthflesh/Transcendent",
-        aka=("Dynamo",),
-        upgraded_by=(_u("thaumaturge"), _u("sacrificial_chamber")),
+        bonus="Construct Monster Effectiveness (T1 10% / T2 25% / T3 35%); adds "
+              "Corrupted Abomination; powers Smithy/Golem Works/Synthflesh/Transcendent",
+        aka=("Dynamo", "Shrine of Empowerment", "Solar Nexus"),  # T1/T2/T3 names
+        upgraded_by=(
+            _count(2, ["thaumaturge", "sacrificial_chamber"], 1),
+            _all(3, ["thaumaturge", "sacrificial_chamber"]),  # both
+        ),
         notes=(
             "Must be connected to a Road/Path to function.",
-            "Power range is Manhattan distance 3/4/5 tiles by tier (T1/T2/T3).",
+            "Powers directly adjacent rooms, and conducts along connected paths to "
+            "rooms beside them; range grows with tier (3/4/5).",
         ),
     ),
     # --- ritual / corruption line -------------------------------------------
@@ -164,9 +192,11 @@ ROOMS: dict[str, Room] = {
         bonus="increased Effect of Temple Mods from Corruption Chambers/Treasure "
               "Vaults/Sacrificial Chambers (T1 8% / T2 15% / T3 22%); "
               "adds Quadrilla Sergeant",
-        upgraded_by=(_u("sacrificial_chamber"),),
+        upgraded_by=(
+            _count(2, ["sacrificial_chamber"], 1),
+            _count(3, ["sacrificial_chamber"], 2),
+        ),
         notes=(
-            "Upgraded by an adjacent Sacrificial Chamber of Tier 2 or 3.",
             "T3 holds a Gem Corrupter device; using it destabilises the room (one-use).",
         ),
     ),
@@ -174,13 +204,16 @@ ROOMS: dict[str, Room] = {
         id="alchemy_lab", name="Alchemy Lab", category="ritual",
         bonus="increased Rarity of Items and Gold found (T1 10% / T2 25%); T1-2 "
               "Soul Core Cache, T3 Soul Core Infuser (-> Core Destabiliser)",
-        upgraded_by=(_u("thaumaturge", {2: 1, 3: 2}),),
+        upgraded_by=(_count(2, ["thaumaturge"], 1), _count(3, ["thaumaturge"], 2)),
     ),
     "corruption_chamber": Room(
         id="corruption_chamber", name="Corruption Chamber", category="ritual",
         bonus="Rare Monsters have a chance for an additional Modifier; T1-2 "
               "Corruption Altar, T3 Corruption Instiller (-> Architect's Orb)",
-        upgraded_by=(_u("thaumaturge"), _u("sacrificial_chamber")),
+        upgraded_by=(
+            _count(2, ["sacrificial_chamber", "thaumaturge"], 1),
+            _count(3, ["sacrificial_chamber", "thaumaturge"], 2),
+        ),
     ),
     "sacrificial_chamber": Room(
         id="sacrificial_chamber", name="Sacrificial Chamber", category="ritual",
@@ -272,10 +305,13 @@ def validate(rooms: dict[str, Room] = ROOMS) -> list[str]:
         if room.category not in CATEGORIES:
             problems.append(f"{rid}: unknown category {room.category!r}")
         for rule in room.upgraded_by:
-            if rule.source not in rooms:
-                problems.append(f"{rid}: upgraded_by unknown room {rule.source!r}")
-            if not rule.counts:
-                problems.append(f"{rid}: upgrade rule from {rule.source!r} has no tier counts")
+            if rule.tier not in (2, 3):
+                problems.append(f"{rid}: upgrade rule has odd tier {rule.tier}")
+            if not rule.sources:
+                problems.append(f"{rid}: upgrade rule for T{rule.tier} has no sources")
+            for s in rule.sources:
+                if s not in rooms:
+                    problems.append(f"{rid}: upgraded_by unknown room {s!r}")
         for other in room.cannot_connect:
             if other not in rooms:
                 problems.append(f"{rid}: cannot_connect unknown room {other!r}")

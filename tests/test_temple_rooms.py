@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from aldur_appraiser.temple.rooms import ROOMS, UpgradeRule, is_volatile, validate
+from aldur_appraiser.temple.rooms import ROOMS, Upgrade, is_volatile, validate
 
 
 def test_treasure_vault_and_architect_rooms_are_volatile():
@@ -19,11 +19,13 @@ def test_keys_match_ids():
     assert all(rid == room.id for rid, room in ROOMS.items())
 
 
-def test_commander_upgrades_from_garrison_counts():
-    rule = ROOMS["commander"].upgraded_by[0]
-    assert isinstance(rule, UpgradeRule)
-    assert rule.source == "garrison"
-    assert rule.counts == {2: 2, 3: 3}
+def test_commander_upgrades_from_barracks_as_a_group():
+    rules = {r.tier: r for r in ROOMS["commander"].upgraded_by}
+    assert isinstance(rules[2], Upgrade)
+    # barracks count together: 2 of {garrison, transcendent} for T2, 3 for T3
+    assert set(rules[2].sources) == {"garrison", "transcendent_barracks"}
+    assert rules[2].count == 2
+    assert rules[3].count == 3
 
 
 def test_mutual_cannot_connect_between_spymaster_and_commander():
