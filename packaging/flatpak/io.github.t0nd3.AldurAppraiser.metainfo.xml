@@ -38,6 +38,11 @@
   <content_rating type="oars-1.1"/>
 
   <releases>
+    <release version="0.3.1" date="2026-06-28">
+      <description>
+        <p>Windows fixes: the Temple Planner now opens from the tray menu (the packaged app launched itself the wrong way), and a hotkey that can't be registered — e.g. because the combination is already taken — now warns you instead of failing silently.</p>
+      </description>
+    </release>
     <release version="0.3.0" date="2026-06-28">
       <description>
         <p>Adds the Vaal Temple planner: read the drawn room cards and held medallions off the screen, then get colour-coded best-placement suggestions on a 9×9 grid that respect the in-game adjacency, tier, generator and destabilisation rules. The app now starts to the system tray, where you can launch the price-checker and the temple planner independently and set your own global appraise hotkey.</p>

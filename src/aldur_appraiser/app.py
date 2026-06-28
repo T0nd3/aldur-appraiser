@@ -341,8 +341,15 @@ def run_overlay(*, backend: str | None = None, style: str = "corner", refresh: b
         threading.Thread(target=run, daemon=True).start()
 
     def open_temple() -> None:
+        # In a frozen build (PyInstaller .exe) sys.executable IS our app, so call
+        # it with just the subcommand; in dev it's the Python interpreter and we
+        # need `-m aldur_appraiser`.
+        if getattr(sys, "frozen", False):
+            cmd = [sys.executable, "temple"]
+        else:
+            cmd = [sys.executable, "-m", "aldur_appraiser", "temple"]
         try:  # launch the planner as its own process
-            subprocess.Popen([sys.executable, "-m", "aldur_appraiser", "temple"])
+            subprocess.Popen(cmd)
         except Exception as exc:  # noqa: BLE001
             bridge.error.emit(f"Temple-Start fehlgeschlagen: {exc}")
 
@@ -427,6 +434,12 @@ def run_overlay(*, backend: str | None = None, style: str = "corner", refresh: b
             lambda: QDesktopServices.openUrl(QUrl(updates.RELEASES_PAGE))
         )
         tray.show()
+        if _is_windows and win_hotkey["hk"] is None:
+            QTimer.singleShot(800, lambda: _notify(
+                f"Appraise-Hotkey ({hk_accel}) konnte nicht belegt werden — evtl. ist "
+                "die Kombination schon vergeben. Im Tray-Menü eine andere wählen.",
+                tray.MessageIcon.Warning,
+            ))
     else:
         bridge.error.connect(lambda m: print(f"error: {m}", file=sys.stderr))
         bridge.update.connect(

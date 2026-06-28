@@ -12,9 +12,15 @@ error) returns None so the caller falls back to the tray trigger.
 
 from __future__ import annotations
 
+import os
 import sys
 import threading
 from collections.abc import Callable
+
+
+def _debug(msg: str) -> None:
+    if os.environ.get("ALDUR_HOTKEY_DEBUG"):
+        print(f"[win-hotkey] {msg}", file=sys.stderr)
 
 # Win32 modifier flags for RegisterHotKey.
 _MOD_ALT = 0x0001
@@ -83,6 +89,12 @@ class WinHotkey:
         self._thread_id = 0
         self._ready = threading.Event()
         self._ok = False
+        self._error = ""
+
+    @property
+    def error(self) -> str:
+        """Empty if the hotkey registered, else a human-readable reason."""
+        return self._error
 
     def start(self, *, timeout_s: float = 4.0) -> bool:
         self._thread = threading.Thread(target=self._run, daemon=True)
@@ -101,26 +113,51 @@ class WinHotkey:
             import ctypes
             from ctypes import wintypes
 
-            user32 = ctypes.windll.user32
-            kernel32 = ctypes.windll.kernel32
+            user32 = ctypes.WinDLL("user32", use_last_error=True)
+            kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+
+            # Pin the signatures so pointer/UINT args are the right width on x64.
+            user32.RegisterHotKey.argtypes = [
+                wintypes.HWND, ctypes.c_int, wintypes.UINT, wintypes.UINT,
+            ]
+            user32.RegisterHotKey.restype = wintypes.BOOL
+            user32.UnregisterHotKey.argtypes = [wintypes.HWND, ctypes.c_int]
+            user32.GetMessageW.argtypes = [
+                ctypes.POINTER(wintypes.MSG), wintypes.HWND, wintypes.UINT, wintypes.UINT,
+            ]
+            user32.GetMessageW.restype = ctypes.c_int
+
             self._thread_id = kernel32.GetCurrentThreadId()
             # id 1 is arbitrary but unique within this thread.
             if not user32.RegisterHotKey(None, 1, self._mods, self._vk):
+                err = ctypes.get_last_error()
+                self._error = (
+                    "Kombination ist bereits belegt" if err == 1409  # ERROR_HOTKEY_ALREADY_REGISTERED
+                    else f"RegisterHotKey fehlgeschlagen (Win32-Fehler {err})"
+                )
+                _debug(self._error)
                 self._ok = False
                 self._ready.set()
                 return
+            _debug(f"registered mods=0x{self._mods:x} vk=0x{self._vk:x}")
             self._ok = True
             self._ready.set()
 
             msg = wintypes.MSG()
-            while user32.GetMessageW(ctypes.byref(msg), None, 0, 0) != 0:
+            while True:
+                ret = user32.GetMessageW(ctypes.byref(msg), None, 0, 0)
+                if ret == 0 or ret == -1:  # WM_QUIT or error
+                    break
                 if msg.message == _WM_HOTKEY:
+                    _debug("WM_HOTKEY -> firing callback")
                     try:
                         self._callback()
-                    except Exception:  # noqa: BLE001 - never kill the loop
-                        pass
+                    except Exception as exc:  # noqa: BLE001 - never kill the loop
+                        _debug(f"callback raised: {exc!r}")
             user32.UnregisterHotKey(None, 1)
-        except Exception:  # noqa: BLE001 - any failure -> caller uses the tray
+        except Exception as exc:  # noqa: BLE001 - any failure -> caller uses the tray
+            self._error = f"{type(exc).__name__}: {exc}"
+            _debug(self._error)
             self._ok = False
             self._ready.set()
 
