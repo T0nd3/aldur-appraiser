@@ -12,9 +12,18 @@ read raw input, the compositor only tells us our own shortcut fired.
 
 from __future__ import annotations
 
+import os
 import secrets
 import threading
 from collections.abc import Callable
+
+
+def _debug(msg: str) -> None:
+    if os.environ.get("ALDUR_HOTKEY_DEBUG"):
+        import sys
+
+        print(f"[hotkey] {msg}", file=sys.stderr)
+
 
 _PORTAL = "org.freedesktop.portal.Desktop"
 _PATH = "/org/freedesktop/portal/desktop"
@@ -51,6 +60,11 @@ class GlobalHotkey:
 
     def _run(self) -> None:
         try:
+            # The venv has no PyGObject; reuse the capture backend's shim that
+            # puts the distro's gi on sys.path.
+            from aldur_appraiser.vision.portal_capture import _ensure_gi
+
+            _ensure_gi()
             import gi
 
             gi.require_version("Gio", "2.0")
@@ -62,14 +76,18 @@ class GlobalHotkey:
             self._sender = self._bus.get_unique_name()[1:].replace(".", "_")
             self._loop = GLib.MainLoop()
 
+            _debug("CreateSession")
             session = self._create_session()
+            _debug(f"session={session}; BindShortcuts (trigger={self._trigger})")
             self._bind_shortcuts(session)
             self._bus.signal_subscribe(
                 _PORTAL, _IFACE, "Activated", _PATH, None,
                 Gio.DBusSignalFlags.NONE, self._on_activated,
             )
+            _debug("registered; waiting for Activated")
             self._ok = True
-        except Exception:  # noqa: BLE001 - any failure -> caller uses the tray
+        except Exception as exc:  # noqa: BLE001 - any failure -> caller uses the tray
+            _debug(f"failed: {type(exc).__name__}: {exc}")
             self._ok = False
             self._ready.set()
             return
@@ -78,6 +96,7 @@ class GlobalHotkey:
 
     def _on_activated(self, _conn, _sender, _path, _iface, _signal, params):
         # Activated(session_handle:o, shortcut_id:s, timestamp:t, options:a{sv})
+        _debug("Activated signal received")
         try:
             shortcut_id = params.unpack()[1]
         except Exception:  # noqa: BLE001

@@ -169,6 +169,16 @@ def cmd_capture_test(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_trigger(args: argparse.Namespace) -> int:
+    """Poke a running `appraiser run` to appraise now (bind to a desktop shortcut)."""
+    from aldur_appraiser.trigger import send
+
+    if send():
+        return 0
+    print("no running 'appraiser run' found to trigger", file=sys.stderr)
+    return 1
+
+
 def cmd_temple(args: argparse.Namespace) -> int:
     try:
         import PySide6  # noqa: F401
@@ -250,6 +260,9 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("temple", help="open the Vaal Temple planner (interactive editor)").set_defaults(
         func=cmd_temple
     )
+    sub.add_parser(
+        "trigger", help="appraise now in a running 'run' (bind to a keyboard shortcut)"
+    ).set_defaults(func=cmd_trigger)
     return p
 
 

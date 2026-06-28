@@ -324,21 +324,24 @@ def run_overlay(*, backend: str | None = None, style: str = "corner", refresh: b
         bridge.uptodate.connect(lambda v: print(f"v{v} is up to date."))
         bridge.error.connect(lambda m: print(f"error: {m}", file=sys.stderr))
 
-    # Register a global hotkey (best-effort). The compositor fires it even while
-    # the game is focused; the callback runs on the portal thread, so marshal to
-    # the GUI thread via the bridge. Falls back to the tray's "Appraise now".
+    # Trigger sources (all marshal to the GUI thread via the bridge):
+    #  1. a Unix-socket poke from `appraiser trigger` — bind it to a desktop
+    #     keyboard shortcut (the reliable path on GNOME), and
+    #  2. the GlobalShortcuts portal (best-effort; KDE / GNOME 48+).
+    # The tray's "Jetzt bewerten" is always available as a fallback.
+    from aldur_appraiser.trigger import serve, socket_path
     from aldur_appraiser.vision.global_hotkey import start_global_hotkey
 
+    trigger_srv = serve(bridge.trigger.emit)  # keep a ref so it isn't GC'd
     hotkey = start_global_hotkey(bridge.trigger.emit)
-    hotkey_help = (
-        "Press your assigned hotkey (KDE: System Settings → Shortcuts → "
-        "'Aldur: appraise the reward panel')"
-        if hotkey is not None
-        else "Left-click the tray icon → 'Appraise now'"
-    )
 
     print(f"aldur-appraiser running in the tray (backend={s.backend}, league={s.pc.league}).")
-    print(f"Open a reward panel in-game, then appraise on demand. {hotkey_help}.")
+    print("Open a reward panel in-game, then appraise on demand:")
+    if trigger_srv is not None:
+        print(f"  • bind a keyboard shortcut to:  appraiser trigger   (socket {socket_path()})")
+    if hotkey is not None:
+        print("  • or the registered global hotkey (KDE / GNOME 48+)")
+    print("  • or the tray icon → 'Jetzt bewerten'")
     # Let Python process SIGINT while the Qt event loop runs.
     signal.signal(signal.SIGINT, lambda *_: app.quit())
     timer = QTimer()
