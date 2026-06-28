@@ -361,6 +361,24 @@ class PortalScreenCast:
         if self._pipeline is not None:
             self._pipeline.set_state(self._Gst.State.NULL)
             self._pipeline = None
+        # Also close the portal session, otherwise the screencast stays "active"
+        # from the compositor's view and keeps disturbing other monitors.
+        if self._session_handle is not None:
+            try:
+                self._bus.call_sync(
+                    "org.freedesktop.portal.Desktop",
+                    self._session_handle,
+                    "org.freedesktop.portal.Session",
+                    "Close",
+                    None,
+                    None,
+                    self._Gio.DBusCallFlags.NONE,
+                    -1,
+                    None,
+                )
+            except Exception:  # noqa: BLE001 - best effort teardown
+                pass
+            self._session_handle = None
 
     def __enter__(self) -> PortalScreenCast:
         self.connect()

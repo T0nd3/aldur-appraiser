@@ -347,7 +347,6 @@ def build_editor():
             if self.temple is None:
                 self.temple = Temple()
             self.brush = "garrison"
-            self._capture = None  # persistent screen-capture session (lazy)
 
             self.grid = GridWidget(self.temple)
             self.grid.cellClicked.connect(self._on_cell)
@@ -480,23 +479,19 @@ def build_editor():
         def _detect_hand(self) -> None:
             """Read the drawn cards off the live game screen (capture + OCR).
 
-            Reuses ONE persistent capture session across clicks. On Wayland the
-            portal/PipeWire backend otherwise starts (and leaks) a fresh screencast
-            per click, which flickers other monitors — opening it once and keeping
-            it open (like the pricing overlay) avoids that."""
+            Grabs a single frame and closes the capture immediately. On Wayland an
+            active portal/PipeWire screencast keeps flickering other monitors with
+            stray fragments, so we keep it open as briefly as possible (one grab)
+            rather than holding a session open. The portal's restore-token means
+            this doesn't re-prompt after the first grant."""
             try:
                 from aldur_appraiser.temple.vision import detect_hand
                 from aldur_appraiser.vision.capture import open_capture
 
-                if self._capture is None:
-                    cap = open_capture()
-                    if hasattr(cap, "connect"):
-                        cap.connect()  # portal: start the one screencast session
-                    self._capture = cap
-                frame = self._capture.grab()
+                with open_capture() as cap:
+                    frame = cap.grab()
                 detected = detect_hand(frame)
             except Exception as e:  # noqa: BLE001 - a UI button must never crash
-                self._close_capture()  # drop a broken session so the next click retries
                 self.suggestions.setText(f"Detection failed: {e}")
                 return
             if not detected:
@@ -508,14 +503,6 @@ def build_editor():
                 self.hand_list.addItem(ROOMS[rid].name)
             names = ", ".join(ROOMS[r].name for r in self.hand)
             self.suggestions.setText(f"Detected {len(self.hand)} cards: {names}")
-
-        def _close_capture(self) -> None:
-            if self._capture is not None:
-                try:
-                    self._capture.close()
-                except Exception:  # noqa: BLE001 - best effort on teardown
-                    pass
-                self._capture = None
 
         def _add_medallion(self) -> None:
             if self.brush in ROOMS:
@@ -648,7 +635,6 @@ def build_editor():
 
         def closeEvent(self, e) -> None:  # noqa: N802
             self._persist()
-            self._close_capture()  # stop the screencast session cleanly
             super().closeEvent(e)
 
         def _refresh(self) -> None:
