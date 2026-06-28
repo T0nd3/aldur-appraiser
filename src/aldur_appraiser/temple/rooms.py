@@ -89,11 +89,10 @@ ALLOWED_NEIGHBORS: dict[str, set[str]] = {
     "armoury": {"path", "smithy", "alchemy_lab", *_BARRACKS},
     "smithy": {"path", "golem_works", "armoury"},
     "golem_works": {"path", "smithy"},
-    # The Generator connects directly to a Path and to its adjacency-upgraders
-    # (Thaumaturge, Sacrificial Chamber). The rooms in its "Upgrades" list
-    # (Smithy/Synthflesh/Transcendent/Golem) are reached by POWER along paths,
-    # not by direct placement adjacency, so they're not connection neighbours.
-    "generator": {"path", "thaumaturge", "sacrificial_chamber"},
+    # The Generator only joins the road: it must sit next to a Path. (In-game the
+    # valid cells hug the road network — being adjacent to a Thaumaturge/Smithy is
+    # NOT enough; those are upgraded by adjacency/power separately.)
+    "generator": {"path"},
     "spymaster": {"path", *_BARRACKS},
     "synthflesh_lab": {"path", "flesh_surgeon", *_BARRACKS},
     "flesh_surgeon": {"path", "synthflesh_lab"},

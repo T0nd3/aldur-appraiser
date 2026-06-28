@@ -87,20 +87,16 @@ def test_alchemy_lab_blocked_when_armoury_already_has_one():
     assert (2, 2) not in set(legal_cells(t, "alchemy_lab"))  # the 2nd is blocked
 
 
-def test_generator_connects_to_thaumaturge_not_smithy():
-    # ALT: the Generator connects to its adjacency-upgraders (Thaumaturge /
-    # Sacrificial Chamber), but NOT to the rooms it powers via paths (Smithy, …).
+def test_generator_joins_the_road_not_adjacent_rooms():
+    # In-game the Generator only sits next to a Path (the road); being adjacent to
+    # a Thaumaturge/Smithy is not enough (those are upgraded by adjacency/power).
     t = _temple(entrance=(0, 0))
     t.place((0, 0), "path")
     t.place((1, 0), "path")
     t.place((1, 1), "thaumaturge")            # accessible, beside the road
-    assert (2, 1) in set(legal_cells(t, "generator"))   # connects via Thaumaturge
-
-    t2 = _temple(entrance=(0, 0))
-    t2.place((0, 0), "path")
-    t2.place((1, 0), "path")
-    t2.place((1, 1), "smithy")                # the Generator only powers it (no link)
-    assert (2, 1) not in set(legal_cells(t2, "generator"))
+    legal = set(legal_cells(t, "generator"))
+    assert (2, 0) in legal                    # beside a path -> legal
+    assert (2, 1) not in legal                # beside only the Thaumaturge -> not legal
 
 
 def test_path_must_attach_to_the_road_not_a_room():
