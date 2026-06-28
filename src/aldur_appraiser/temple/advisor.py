@@ -47,10 +47,18 @@ def score(temple: Temple, values: dict[str, float] | None = None) -> float:
     total = 0.0
     for c in temple.accessible_room_cells():  # only connected rooms give bonuses
         rid = temple.effective_room_id(c)
-        worth = values.get(rid, 1.0) * tiers.get(c, 1)
-        if c in removable:            # a loose end -> destabilisation can delete it
+        room = ROOMS[rid]
+        # Generators carry extra weight: besides their own tier they power nearby
+        # rooms and scale a global Temple Mod (Construct Effectiveness), so a
+        # higher-tier Generator should clearly win.
+        default = 2.0 if room.generator else 1.0
+        worth = values.get(rid, default) * tiers.get(c, 1)
+        # A Generator is a functional power source you keep, not a throwaway chain
+        # end, so its tier counts in full — without this a T2 Generator at a loose
+        # end (0.4x) would rank below a T1 elsewhere.
+        if c in removable and not room.generator:
             worth *= 1.0 - REMOVABLE_DISCOUNT
-        if is_volatile(ROOMS[rid]):   # self-destabilises once used
+        if is_volatile(room):         # self-destabilises once used
             worth *= 1.0 - VOLATILE_DISCOUNT
         total += worth
     total -= VIOLATION_PENALTY * len(temple.connection_violations())

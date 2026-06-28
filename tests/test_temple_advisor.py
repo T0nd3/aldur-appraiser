@@ -2,12 +2,25 @@
 
 from __future__ import annotations
 
+import pytest
+
 from aldur_appraiser.temple.advisor import legal_cells, plan_hand, score, suggest
 from aldur_appraiser.temple.engine import Temple
 
 
 def _temple(entrance=(0, 0)):
     return Temple(entrance=entrance)
+
+
+def test_generator_is_weighted_and_exempt_from_loose_end_discount():
+    # a lone Generator keeps its full weighted value (no loose-end discount),
+    # unlike a normal room — so a higher-tier Generator clearly outranks a lower.
+    g = _temple()
+    g.place((0, 0), "generator")
+    assert score(g) == pytest.approx(2.0)   # value 2.0 x T1, NOT discounted
+    n = _temple()
+    n.place((0, 0), "garrison")
+    assert score(n) == pytest.approx(0.4)   # value 1.0 x T1 x (1 - 0.6 loose-end)
 
 
 def test_score_rewards_higher_tiers():
