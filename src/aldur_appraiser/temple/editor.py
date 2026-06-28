@@ -412,6 +412,8 @@ def build_editor():
             remove_med.clicked.connect(self._remove_medallion)
             clear_med = QPushButton("Clear medallions")
             clear_med.clicked.connect(self._clear_medallions)
+            detect_med_btn = QPushButton("Detect medallions from screen")
+            detect_med_btn.clicked.connect(self._detect_medallions)
 
             left = QVBoxLayout()
             left.addWidget(QLabel("Room (left-click place · right-click erase)"))
@@ -434,6 +436,7 @@ def build_editor():
             left.addWidget(add_med)
             left.addWidget(remove_med)
             left.addWidget(clear_med)
+            left.addWidget(detect_med_btn)
             left.addWidget(suggest_btn)
             legend = QLabel(
                 "Markers:  ⚠ amber = destabilises on use (avoid / mind its effect)   ·   "
@@ -486,11 +489,8 @@ def build_editor():
             this doesn't re-prompt after the first grant."""
             try:
                 from aldur_appraiser.temple.vision import detect_hand
-                from aldur_appraiser.vision.capture import open_capture
 
-                with open_capture() as cap:
-                    frame = cap.grab()
-                detected = detect_hand(frame)
+                detected = detect_hand(self._grab_screen())
             except Exception as e:  # noqa: BLE001 - a UI button must never crash
                 self.suggestions.setText(f"Detection failed: {e}")
                 return
@@ -503,6 +503,35 @@ def build_editor():
                 self.hand_list.addItem(ROOMS[rid].name)
             names = ", ".join(ROOMS[r].name for r in self.hand)
             self.suggestions.setText(f"Detected {len(self.hand)} cards: {names}")
+
+        def _grab_screen(self):
+            """One BGR frame off the screen. One-shot (open+grab+close) so the
+            Wayland screencast is active only momentarily; the portal restore-token
+            means it doesn't re-prompt after the first grant."""
+            from aldur_appraiser.vision.capture import open_capture
+
+            with open_capture() as cap:
+                return cap.grab()
+
+        def _detect_medallions(self) -> None:
+            """Read the held medallions off the screen (icon template-matching)."""
+            try:
+                from aldur_appraiser.temple.vision import detect_medallions
+
+                detected = detect_medallions(self._grab_screen())
+            except Exception as e:  # noqa: BLE001 - a UI button must never crash
+                self.suggestions.setText(f"Detection failed: {e}")
+                return
+            if not detected:
+                self.suggestions.setText("No medallions detected on screen.")
+                return
+            self.medallions = list(detected)
+            self.medallion_list.clear()
+            for rid in self.medallions:
+                self.medallion_list.addItem(ROOMS[rid].name)
+            self._persist()
+            names = ", ".join(ROOMS[r].name for r in self.medallions)
+            self.suggestions.setText(f"Detected {len(self.medallions)} medallion(s): {names}")
 
         def _add_medallion(self) -> None:
             if self.brush in ROOMS:

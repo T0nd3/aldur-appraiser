@@ -12,13 +12,20 @@ import pytest
 
 cv2 = pytest.importorskip("cv2")
 
-from aldur_appraiser.temple.vision import detect_hand  # noqa: E402
+from aldur_appraiser.temple.vision import detect_hand, detect_medallions  # noqa: E402
 
 FIXDIR = Path(__file__).resolve().parents[1] / "assets" / "fixtures"
 CARDS = FIXDIR / "temple_cards.png"
 FULL = FIXDIR / "temple_full.png"
+MEDALLIONS = FIXDIR / "temple_medallions.png"
 
 EXPECTED = ["path", "generator", "treasure_vault", "path", "smithy", "path"]
+
+
+def _has_room_icons() -> bool:
+    from aldur_appraiser.temple.icons import room_icon_paths
+
+    return bool(room_icon_paths())
 
 
 @pytest.mark.skipif(not CARDS.exists(), reason="temple card fixture not present")
@@ -32,3 +39,12 @@ def test_detect_hand_works_on_the_full_frame():
     pytest.importorskip("rapidocr_onnxruntime")
     # the same cards must be found even on the whole console screenshot
     assert detect_hand(cv2.imread(str(FULL)))[:6] == EXPECTED
+
+
+@pytest.mark.skipif(not MEDALLIONS.exists(), reason="medallions fixture not present")
+def test_detect_medallions_matches_room_icons():
+    pytest.importorskip("rapidocr_onnxruntime")
+    if not _has_room_icons():
+        pytest.skip("room icons unavailable (offline) — needed as match templates")
+    # the held medallion's symbol is the Synthflesh Lab room icon
+    assert detect_medallions(cv2.imread(str(MEDALLIONS))) == ["synthflesh_lab"]
