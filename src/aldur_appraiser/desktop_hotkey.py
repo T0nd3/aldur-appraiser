@@ -23,8 +23,10 @@ def trigger_command() -> str:
     if os.path.exists("/.flatpak-info") or os.environ.get("FLATPAK_ID"):
         return "flatpak run --command=appraiser io.github.t0nd3.AldurAppraiser trigger"
     exe = sys.argv[0] or ""
-    if exe and os.path.basename(exe).startswith("appraiser") and os.path.exists(exe):
-        return f"{shlex.quote(exe)} trigger"
+    if exe and os.path.basename(exe).startswith("appraiser"):
+        exe = os.path.abspath(exe)
+        if os.path.exists(exe):
+            return f"{shlex.quote(exe)} trigger"
     found = shutil.which("appraiser")
     if found:
         return f"{shlex.quote(found)} trigger"
