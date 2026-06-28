@@ -21,6 +21,10 @@ def test_card_name_to_id_maps_ingame_card_labels():
     assert card_name_to_id("Chamber of Souls") == "alchemy_lab"
     assert card_name_to_id("Surgeon's Ward") == "flesh_surgeon"
     assert card_name_to_id("Spymaster's Study") == "spymaster"
+    assert card_name_to_id("Workshop") == "golem_works"
+    assert card_name_to_id("Guardhouse") == "garrison"
+    assert card_name_to_id("Crimson Hall") == "corruption_chamber"
+    assert card_name_to_id("Altar of Sacrifice") == "sacrificial_chamber"
 
 
 def test_card_name_to_id_tolerates_ocr_noise_and_rejects_junk():

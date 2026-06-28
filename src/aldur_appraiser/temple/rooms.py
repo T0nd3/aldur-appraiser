@@ -261,6 +261,7 @@ ROOMS: dict[str, Room] = {
         id="golem_works", name="Golem Works", category="production",
         bonus="increased Effect of Temple Mods from Garrisons/Commanders/"
               "Armouries/Smithies/Legion Barracks (T2 15%); adds High Priest",
+        aka=("Workshop",),  # in-game card name
         upgraded_by=(_count(2, ["generator"], 1), _count(3, ["generator"], 2)),
     ),
     "synthflesh_lab": Room(
@@ -330,6 +331,7 @@ ROOMS: dict[str, Room] = {
         id="corruption_chamber", name="Corruption Chamber", category="ritual",
         bonus="Rare Monsters have a chance for an additional Modifier; T1-2 "
               "Corruption Altar, T3 Corruption Instiller (-> Architect's Orb)",
+        aka=("Crimson Hall",),  # in-game card name
         destabilises_at=3,  # T3 Corruption Instiller destabilises the room on use
         upgraded_by=(
             _count(2, ["sacrificial_chamber", "thaumaturge"], 1),
@@ -340,6 +342,7 @@ ROOMS: dict[str, Room] = {
         id="sacrificial_chamber", name="Sacrificial Chamber", category="ritual",
         bonus="increased number of Rare Chests; T3 Morphology Mechanism "
               "(-> Vaal Cultivation Orb)",
+        aka=("Altar of Sacrifice",),  # in-game card name
         manual_tier=True,
         destabilises_at=3,  # T3 Morphology Mechanism destabilises the room on use
         notes=(
