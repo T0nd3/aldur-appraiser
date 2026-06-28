@@ -239,8 +239,40 @@ def run_overlay(*, backend: str | None = None, style: str = "corner", refresh: b
         error = Signal(str)
         update = Signal(str)     # a newer release is available
         uptodate = Signal(str)   # manual check: already current
+        trigger = Signal()       # appraise-now request (hotkey / tray), GUI thread
 
     bridge = _Bridge()
+
+    # --- on-demand appraisal: capture + price one frame on request -----------
+    # Capturing only on demand (not in a continuous loop) keeps the Wayland
+    # screencast inactive between requests, so it stops flickering other monitors.
+    loop = _make_loop(s, on_result=on_result, on_hide=overlay.post_hide, on_busy=on_busy)
+    _busy = threading.Event()
+
+    def appraise_once() -> None:
+        if _busy.is_set():
+            return  # an appraisal is already running
+        _busy.set()
+
+        def work() -> None:
+            try:
+                with open_capture(backend=s.backend) as cap:
+                    if hasattr(cap, "assert_capturable"):
+                        cap.assert_capturable()
+                    frame = cap.grab()
+                loop._last_sig = None  # force a fresh evaluation each request
+                if loop.step(frame) is None and not loop._panel_visible:
+                    overlay.post_hide()  # no reward panel found -> clear any stale HUD
+            except Exception as exc:  # noqa: BLE001 - surface to the tray, keep running
+                msg = f"{type(exc).__name__}: {exc}"
+                print(f"capture error: {msg}", file=sys.stderr)
+                bridge.error.emit(msg)
+            finally:
+                _busy.clear()
+
+        threading.Thread(target=work, daemon=True).start()
+
+    bridge.trigger.connect(appraise_once)
 
     def _check_updates(notify_uptodate: bool) -> None:
         def run():
@@ -252,7 +284,9 @@ def run_overlay(*, backend: str | None = None, style: str = "corner", refresh: b
 
         threading.Thread(target=run, daemon=True).start()
 
-    tray = _make_tray(app, s, app_icon, on_check=lambda: _check_updates(True))
+    tray = _make_tray(
+        app, s, app_icon, on_check=lambda: _check_updates(True), on_appraise=appraise_once
+    )
 
     if tray is not None:
         def _notify(body, level):
@@ -290,26 +324,21 @@ def run_overlay(*, backend: str | None = None, style: str = "corner", refresh: b
         bridge.uptodate.connect(lambda v: print(f"v{v} is up to date."))
         bridge.error.connect(lambda m: print(f"error: {m}", file=sys.stderr))
 
-    def worker() -> None:
-        try:
-            # Open capture first so the permission dialog appears promptly,
-            # before the slower OCR-engine init.
-            with open_capture(backend=s.backend) as cap:
-                if hasattr(cap, "assert_capturable"):
-                    cap.assert_capturable()
-                loop = _make_loop(
-                    s, on_result=on_result, on_hide=overlay.post_hide, on_busy=on_busy
-                )
-                loop.run(cap, poll_fps=s.poll_fps)
-        except Exception as exc:  # noqa: BLE001 - surface backend errors to the tray
-            msg = f"{type(exc).__name__}: {exc}"
-            print(f"capture error: {msg}", file=sys.stderr)
-            bridge.error.emit(msg)  # keep running so the user sees it and can Quit
+    # Register a global hotkey (best-effort). The compositor fires it even while
+    # the game is focused; the callback runs on the portal thread, so marshal to
+    # the GUI thread via the bridge. Falls back to the tray's "Appraise now".
+    from aldur_appraiser.vision.global_hotkey import start_global_hotkey
 
-    threading.Thread(target=worker, daemon=True).start()
+    hotkey = start_global_hotkey(bridge.trigger.emit)
+    hotkey_help = (
+        "Press your assigned hotkey (KDE: System Settings → Shortcuts → "
+        "'Aldur: appraise the reward panel')"
+        if hotkey is not None
+        else "Left-click the tray icon → 'Appraise now'"
+    )
 
     print(f"aldur-appraiser running in the tray (backend={s.backend}, league={s.pc.league}).")
-    print("Open a Runeshape Combinations panel in-game. Right-click the tray icon to quit.")
+    print(f"Open a reward panel in-game, then appraise on demand. {hotkey_help}.")
     # Let Python process SIGINT while the Qt event loop runs.
     signal.signal(signal.SIGINT, lambda *_: app.quit())
     timer = QTimer()
@@ -319,8 +348,8 @@ def run_overlay(*, backend: str | None = None, style: str = "corner", refresh: b
     return app.exec()
 
 
-def _make_tray(app, setup, icon_path, on_check):
-    """System-tray icon with a right-click menu (check updates, quit)."""
+def _make_tray(app, setup, icon_path, on_check, on_appraise=None):
+    """System-tray icon with a right-click menu (appraise now, check updates, quit)."""
     from PySide6.QtGui import QAction, QColor, QCursor, QIcon, QPainter, QPixmap
     from PySide6.QtWidgets import QMenu, QSystemTrayIcon
 
@@ -349,6 +378,11 @@ def _make_tray(app, setup, icon_path, on_check):
     title.setEnabled(False)
     menu.addAction(title)
     menu.addSeparator()
+    if on_appraise is not None:
+        appraise_action = QAction("Jetzt bewerten", menu)
+        appraise_action.triggered.connect(on_appraise)
+        menu.addAction(appraise_action)
+        menu.addSeparator()
     check_action = QAction("Nach Updates suchen", menu)
     check_action.triggered.connect(on_check)
     menu.addAction(check_action)
