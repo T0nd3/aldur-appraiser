@@ -23,6 +23,10 @@ CATEGORY_COLOR = {
 ERASE = "— erase —"  # sentinel palette entry
 MEDALLION = "✦ Medallion +1 Tier"  # brush: click a room to toggle a +1-tier boost
 
+# Distinct, readable highlight colours assigned per suggested room so the grid
+# cell and its line in the "Best placements" list share a colour.
+HIGHLIGHT_PALETTE = ["#ffd24a", "#5ab0ff", "#9be15a", "#ff7ad0", "#ffa54a", "#b58aff"]
+
 # Goal presets -> per-room advisor weights. The user picks one instead of tuning
 # individual rooms; missing rooms default to weight 1.0. NB: Vaults are NOT
 # weighted up — they're one-use (destabilise when opened) and the efficient
@@ -164,9 +168,9 @@ def build_editor():
             self._removable: set[tuple[int, int]] = set()
             self._disconnected: set[tuple[int, int]] = set()
             self._boosted: set[tuple[int, int]] = set()
-            # cell -> rank (0 = best). Equal-value cells share a rank/colour;
-            # weaker ones get a higher rank and a dimmer shade.
-            self._highlights: dict[tuple[int, int], int] = {}
+            # suggested cell -> QColor (one colour per suggested room, matching its
+            # line in the "Best placements" list).
+            self._highlights: dict[tuple[int, int], object] = {}
             self.setMouseTracking(True)
             n = self.pad + self.cell * temple.size
             self.setFixedSize(n, n)
@@ -179,19 +183,14 @@ def build_editor():
         def refresh(self) -> None:
             self.temple_changed()
 
-        def set_highlights(self, ranks) -> None:
-            """`ranks` is either {cell: rank} (0 = best, higher = weaker/dimmer) or
-            a plain iterable of cells (all treated as the best rank)."""
-            if isinstance(ranks, dict):
-                self._highlights = dict(ranks)
+        def set_highlights(self, colors) -> None:
+            """`colors` is {cell: QColor}, or a plain iterable of cells (gold)."""
+            if isinstance(colors, dict):
+                self._highlights = dict(colors)
             else:
-                self._highlights = {c: 0 for c in ranks}
+                gold = QColor("#ffd24a")
+                self._highlights = {c: gold for c in colors}
             self.update()
-
-        def _rank_color(self, rank: int):
-            """Gold for the best placements, dimming one step per weaker rank."""
-            factor = max(0.32, 1.0 - 0.24 * rank)
-            return QColor(int(255 * factor), int(210 * factor), int(74 * factor))
 
         def temple_changed(self) -> None:
             self._tiers = self.temple.tiers()
@@ -334,7 +333,7 @@ def build_editor():
                         p.setPen(QColor("#e08a2a"))
                         p.drawRect(r.adjusted(6, 6, -6, -6))
                     if c in self._highlights:
-                        p.setPen(self._rank_color(self._highlights[c]))
+                        p.setPen(self._highlights[c])
                         p.drawRect(r.adjusted(2, 2, -2, -2))
                         p.drawRect(r.adjusted(4, 4, -4, -4))
             p.end()
@@ -441,8 +440,8 @@ def build_editor():
             legend = QLabel(
                 "Markers:  ⚠ amber = destabilises on use (avoid / mind its effect)   ·   "
                 "orange = deletable loose end   ·   cyan dashed = not connected to entrance   ·   "
-                "gold = suggested placement   ·   ✦ = Medallion +1 tier "
-                "(pick the Medallion brush, click a room)"
+                "coloured border = suggested placement (matches its line below)   ·   "
+                "✦ = Medallion +1 tier (pick the Medallion brush, click a room)"
             )
             legend.setWordWrap(True)
             legend.setStyleSheet("color: #9b927d;")
@@ -563,21 +562,26 @@ def build_editor():
                 self.suggestions.setText("No legal placement found.")
                 self.grid.set_highlights(())
                 return
-            # colour every suggested cell by value: equal gain -> same colour,
-            # weaker placements dim down a rank at a time.
-            best_by_cell: dict[tuple[int, int], float] = {}
+            # one colour per suggested room, shared by its grid cell(s) and its
+            # line in the list, so it's obvious which room goes where.
+            room_color: dict[str, str] = {}
             for s in ranked:
-                g = round(s.gain, 3)
-                if s.cell not in best_by_cell or g > best_by_cell[s.cell]:
-                    best_by_cell[s.cell] = g
-            distinct = sorted(set(best_by_cell.values()), reverse=True)
-            rank_of = {g: i for i, g in enumerate(distinct)}
-            self.grid.set_highlights({c: rank_of[g] for c, g in best_by_cell.items()})
+                if s.card not in room_color:
+                    room_color[s.card] = HIGHLIGHT_PALETTE[len(room_color) % len(HIGHLIGHT_PALETTE)]
+            # grid: best (highest-gain) suggestion per cell, coloured by its room
+            best_by_cell: dict[tuple[int, int], object] = {}
+            best_gain: dict[tuple[int, int], float] = {}
+            for s in ranked:
+                if s.cell not in best_gain or s.gain > best_gain[s.cell]:
+                    best_gain[s.cell] = s.gain
+                    best_by_cell[s.cell] = QColor(room_color[s.card])
+            self.grid.set_highlights(best_by_cell)
             lines = [
-                f"{i + 1}. {s.note}  @ {cellname(s.cell)}  (+{s.gain:.1f})"
+                f'<span style="color:{room_color[s.card]}">{i + 1}. {s.note}  @ '
+                f"{cellname(s.cell)}  (+{s.gain:.1f})</span>"
                 for i, s in enumerate(ranked)
             ]
-            self.suggestions.setText("Best placements:\n" + "\n".join(lines))
+            self.suggestions.setText("Best placements:<br>" + "<br>".join(lines))
 
         def _populate_tier_select(self) -> None:
             """Fill the manual-tier dropdown with 1..max_tier, keeping the choice."""

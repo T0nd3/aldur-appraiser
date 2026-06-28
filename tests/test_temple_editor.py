@@ -58,11 +58,11 @@ def test_editor_advisor_highlights_best_cell():
     w._add_card()
     assert w.hand == ["garrison"]
     w._suggest()
-    assert (4, 6) in w.grid._highlights
-    assert w.grid._highlights[(4, 6)] == 0          # the best placement -> rank 0
+    assert (4, 6) in w.grid._highlights          # the best placement is highlighted
 
 
-def test_suggest_highlights_all_cells_ranked_by_value():
+def test_suggest_colours_highlights_per_room():
+    from PySide6.QtGui import QColor
     from PySide6.QtWidgets import QApplication
 
     _app = QApplication.instance() or QApplication([])
@@ -70,11 +70,13 @@ def test_suggest_highlights_all_cells_ranked_by_value():
     w.temple.place((4, 8), "garrison")          # anchor at the entrance
     w.hand = ["alchemy_lab"]
     w._suggest()
-    ranks = w.grid._highlights
-    assert len(ranks) > 1                        # all suggested cells highlighted
-    assert min(ranks.values()) == 0              # best placement -> rank 0
-    # ranks are a contiguous 0..k band (equal-value cells share a rank)
-    assert set(ranks.values()) == set(range(max(ranks.values()) + 1))
+    highs = w.grid._highlights
+    assert len(highs) > 1
+    assert all(isinstance(c, QColor) for c in highs.values())
+    # a single room -> all its cells share one colour
+    assert len({c.name() for c in highs.values()}) == 1
+    # the colour also appears in the (rich-text) list, matching the cells
+    assert highs[next(iter(highs))].name() in w.suggestions.text().lower()
 
 
 def test_remove_selected_card_from_hand():
@@ -102,7 +104,7 @@ def test_editor_preset_feeds_the_advisor():
     w.preset_select.setCurrentText("Currency & Rarity")   # weights Alchemy Lab up
     assert w.weights.get("alchemy_lab", 1.0) > 1.0
     w._suggest()
-    assert "Alchemy Lab" in w.suggestions.text().splitlines()[1]
+    assert "1. Alchemy Lab" in w.suggestions.text()   # weighted up -> top suggestion
 
 
 def test_medallion_rooms_feed_the_advisor():
