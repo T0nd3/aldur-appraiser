@@ -309,16 +309,26 @@ def run_overlay(*, backend: str | None = None, style: str = "corner", refresh: b
 
     bridge.trigger.connect(_on_trigger)
 
-    # Always-on trigger sources (no capture until the checker is enabled):
-    #  1. Unix-socket poke from `appraiser trigger` (bound to a desktop shortcut),
-    #  2. the GlobalShortcuts portal (best-effort; KDE / GNOME 48+).
-    from aldur_appraiser.trigger import serve
-    from aldur_appraiser.vision.global_hotkey import start_global_hotkey
-
-    trigger_srv = serve(bridge.trigger.emit)  # keep a ref so it isn't GC'd
+    # Always-on trigger sources (no capture until the checker is enabled).
     hk_accel = user_settings.get("hotkey", user_settings.DEFAULT_HOTKEY)
-    portal_hotkey = start_global_hotkey(bridge.trigger.emit, trigger=accel_to_portal(hk_accel))
-    _keepalive = (trigger_srv, portal_hotkey)  # noqa: F841
+    _is_windows = sys.platform.startswith("win")
+    win_hotkey: dict = {"hk": None}  # live handle so set_hotkey() can rebind it
+    if _is_windows:
+        # Windows lets us grab a true system-wide hotkey in-process; no socket /
+        # portal / desktop-binding needed.
+        from aldur_appraiser.win_hotkey import start_global_hotkey as start_win_hotkey
+
+        win_hotkey["hk"] = start_win_hotkey(bridge.trigger.emit, accelerator=hk_accel)
+        _keepalive = (win_hotkey,)  # noqa: F841
+    else:
+        #  1. Unix-socket poke from `appraiser trigger` (bound to a desktop shortcut),
+        #  2. the GlobalShortcuts portal (best-effort; KDE / GNOME 48+).
+        from aldur_appraiser.trigger import serve
+        from aldur_appraiser.vision.global_hotkey import start_global_hotkey
+
+        trigger_srv = serve(bridge.trigger.emit)  # keep a ref so it isn't GC'd
+        portal_hotkey = start_global_hotkey(bridge.trigger.emit, trigger=accel_to_portal(hk_accel))
+        _keepalive = (trigger_srv, portal_hotkey)  # noqa: F841
 
     def _check_updates(notify_uptodate: bool) -> None:
         def run():
@@ -346,8 +356,20 @@ def run_overlay(*, backend: str | None = None, style: str = "corner", refresh: b
             return
         accel = text.strip()
         user_settings.set("hotkey", accel)
-        bound = bind_gnome_shortcut(accel)
-        if bound:
+        if _is_windows:
+            # Re-register the live system-wide hotkey right away.
+            from aldur_appraiser.win_hotkey import start_global_hotkey as start_win_hotkey
+
+            old = win_hotkey.get("hk")
+            if old is not None:
+                old.stop()
+            win_hotkey["hk"] = start_win_hotkey(bridge.trigger.emit, accelerator=accel)
+            if win_hotkey["hk"] is not None:
+                body = f"Hotkey gesetzt: {accel}."
+            else:
+                body = (f"Hotkey gespeichert: {accel}, konnte aber nicht belegt werden — "
+                        "evtl. ist die Kombination schon vergeben. Bitte eine andere wählen.")
+        elif bind_gnome_shortcut(accel):
             body = f"Hotkey gesetzt: {accel} (GNOME-Kürzel eingetragen)."
         else:
             body = (f"Hotkey gespeichert: {accel}. Automatische Bindung nicht möglich — "
