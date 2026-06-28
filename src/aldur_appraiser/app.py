@@ -182,109 +182,143 @@ def run_console(*, backend: str | None = None, refresh: bool = False) -> int:
     return 0
 
 
+def _tray_icon(icon_path):
+    from PySide6.QtGui import QColor, QIcon, QPainter, QPixmap
+
+    if icon_path is not None:
+        return QIcon(str(icon_path))
+    pm = QPixmap(32, 32)
+    pm.fill(QColor(0, 0, 0, 0))
+    p = QPainter(pm)
+    p.setRenderHint(QPainter.Antialiasing)
+    p.setBrush(QColor("#d9c89a"))
+    p.setPen(QColor("#5a4a2a"))
+    p.drawEllipse(3, 3, 26, 26)
+    p.end()
+    return QIcon(pm)
+
+
 def run_overlay(*, backend: str | None = None, style: str = "corner", refresh: bool = False) -> int:
+    """Tray-first app: launch shows only a tray icon; the user starts the
+    Price-Checker and/or opens the Temple Planner from its menu."""
     import os
     import signal
+    import subprocess
     import threading
 
-    # opencv-python (a transitive dep, imported when detect/ocr load cv2) hijacks
-    # QT_QPA_PLATFORM_PLUGIN_PATH to its own bundled Qt plugins, which shadow the
-    # real Qt plugins and break the xcb platform plugin (notably inside the
-    # Flatpak, where Qt's plugins live in the runtime). Drop that override so Qt
-    # uses its normal search path.
+    # opencv-python hijacks QT_QPA_PLATFORM_PLUGIN_PATH (breaks the xcb plugin);
+    # drop it. On Wayland xcb honors always-on-top/click-through more reliably.
     if "cv2" in os.environ.get("QT_QPA_PLATFORM_PLUGIN_PATH", ""):
         os.environ.pop("QT_QPA_PLATFORM_PLUGIN_PATH", None)
-
-    # On Wayland, always-on-top + click-through are honored more reliably under
-    # XWayland (xcb) than the native wayland Qt platform; let users override.
     if sys.platform.startswith("linux") and os.environ.get("WAYLAND_DISPLAY"):
         os.environ.setdefault("QT_QPA_PLATFORM", "xcb")
 
-    from PySide6.QtCore import QObject, QTimer, Signal
-    from PySide6.QtGui import QIcon
-    from PySide6.QtWidgets import QApplication
+    from PySide6.QtCore import QObject, QTimer, QUrl, Signal
+    from PySide6.QtGui import QAction, QCursor, QDesktopServices, QIcon
+    from PySide6.QtWidgets import QApplication, QInputDialog, QMenu, QSystemTrayIcon
 
-    from aldur_appraiser.icons import currency_icon_paths
+    from aldur_appraiser import __version__, updates
+    from aldur_appraiser import settings as user_settings
+    from aldur_appraiser.desktop_hotkey import accel_to_portal, bind_gnome_shortcut
     from aldur_appraiser.resources import resource_path
-    from aldur_appraiser.vision.capture import open_capture
-    from aldur_appraiser.vision.overlay import build_inline_overlay, build_overlay
 
-    s = _prepare(backend, refresh=refresh)
     app = QApplication([])
     app.setQuitOnLastWindowClosed(False)  # live in the tray, not tied to a window
     app_icon = resource_path("assets/icon.png")
     app_icon = str(app_icon) if app_icon.exists() else None
     if app_icon:
         app.setWindowIcon(QIcon(app_icon))
-    stale = s.cached.stale
-    dr = divine_rate(s.cached.table)
 
-    if style == "inline":
-        icons = currency_icon_paths(s.pc.realm, s.pc.league)  # {exalted,divine} best-effort
-        overlay = build_inline_overlay(s.pc.base, icon_paths=icons, divine_rate=dr)
-        on_result = lambda a: overlay.post_rows(a.rows, a.anchor)  # noqa: E731
-        on_busy = overlay.post_busy
-    else:
-        overlay = build_overlay(s.pc.base)
-        on_result = lambda a: overlay.post_result(a.result, stale, a.anchor, dr)  # noqa: E731
-        on_busy = lambda _anchor: None  # noqa: E731  (corner HUD has no spinner)
-
-    from PySide6.QtCore import QUrl
-    from PySide6.QtGui import QAction, QDesktopServices
-
-    from aldur_appraiser import __version__, updates
-
-    # Bridge background-thread events to the GUI thread (tray notifications).
     class _Bridge(QObject):
         error = Signal(str)
         update = Signal(str)     # a newer release is available
         uptodate = Signal(str)   # manual check: already current
         trigger = Signal()       # appraise-now request (hotkey / tray), GUI thread
-        shown = Signal()         # a result was just shown -> (re)start the auto-hide timer
+        shown = Signal()         # a result was shown -> (re)start the auto-hide timer
 
     bridge = _Bridge()
+    pc: dict = {"built": False, "enabled": False}  # price-checker state (lazy)
 
-    # --- on-demand appraisal: capture + price one frame on request -----------
-    # Capturing only on demand (not in a continuous loop) keeps the Wayland
-    # screencast inactive between requests, so it stops flickering other monitors.
-    loop = _make_loop(s, on_result=on_result, on_hide=overlay.post_hide, on_busy=on_busy)
-    _busy = threading.Event()
+    def _build_pricechecker() -> None:
+        """Load prices + build the overlay/capture pipeline on first use."""
+        from aldur_appraiser.icons import currency_icon_paths
+        from aldur_appraiser.vision.capture import open_capture
+        from aldur_appraiser.vision.overlay import build_inline_overlay, build_overlay
 
-    def appraise_once() -> None:
-        if _busy.is_set():
-            return  # an appraisal is already running
-        _busy.set()
+        s = _prepare(backend, refresh=refresh)
+        stale = s.cached.stale
+        dr = divine_rate(s.cached.table)
+        if style == "inline":
+            icons = currency_icon_paths(s.pc.realm, s.pc.league)
+            overlay = build_inline_overlay(s.pc.base, icon_paths=icons, divine_rate=dr)
+            on_result = lambda a: overlay.post_rows(a.rows, a.anchor)  # noqa: E731
+            on_busy = overlay.post_busy
+        else:
+            overlay = build_overlay(s.pc.base)
+            on_result = lambda a: overlay.post_result(a.result, stale, a.anchor, dr)  # noqa: E731
+            on_busy = lambda _a: None  # noqa: E731
+        loop = _make_loop(s, on_result=on_result, on_hide=overlay.post_hide, on_busy=on_busy)
+        busy = threading.Event()
 
-        def work() -> None:
-            try:
-                with open_capture(backend=s.backend) as cap:
-                    if hasattr(cap, "assert_capturable"):
-                        cap.assert_capturable()
-                    frame = cap.grab()
-                loop._last_sig = None  # force a fresh evaluation each request
-                if loop.step(frame) is None:
-                    overlay.post_hide()  # no reward panel found -> clear any stale HUD
-                else:
-                    bridge.shown.emit()  # got a result -> (re)start the auto-hide timer
-            except Exception as exc:  # noqa: BLE001 - surface to the tray, keep running
-                msg = f"{type(exc).__name__}: {exc}"
-                print(f"capture error: {msg}", file=sys.stderr)
-                bridge.error.emit(msg)
-            finally:
-                _busy.clear()
+        def appraise_once() -> None:
+            if not pc["enabled"] or busy.is_set():
+                return
+            busy.set()
 
-        threading.Thread(target=work, daemon=True).start()
+            def work() -> None:
+                try:
+                    with open_capture(backend=s.backend) as cap:
+                        if hasattr(cap, "assert_capturable"):
+                            cap.assert_capturable()
+                        frame = cap.grab()
+                    loop._last_sig = None  # force a fresh evaluation each request
+                    if loop.step(frame) is None:
+                        overlay.post_hide()
+                    else:
+                        bridge.shown.emit()
+                except Exception as exc:  # noqa: BLE001 - surface to the tray, keep running
+                    print(f"capture error: {type(exc).__name__}: {exc}", file=sys.stderr)
+                    bridge.error.emit(f"{type(exc).__name__}: {exc}")
+                finally:
+                    busy.clear()
 
-    bridge.trigger.connect(appraise_once)
+            threading.Thread(target=work, daemon=True).start()
 
-    # Auto-hide the result so an on-demand appraisal doesn't linger forever.
-    # Each new appraisal restarts the timer; ALDUR_HIDE_MS=0 disables it.
-    hide_after_ms = int(os.environ.get("ALDUR_HIDE_MS", "12000"))
-    hide_timer = QTimer()
-    hide_timer.setSingleShot(True)
-    hide_timer.timeout.connect(overlay.post_hide)
-    if hide_after_ms > 0:
-        bridge.shown.connect(lambda: hide_timer.start(hide_after_ms))
+        hide_ms = int(os.environ.get("ALDUR_HIDE_MS", "12000"))
+        ht = QTimer()
+        ht.setSingleShot(True)
+        ht.timeout.connect(overlay.post_hide)
+        if hide_ms > 0:
+            bridge.shown.connect(lambda: ht.start(hide_ms))
+        pc.update(built=True, appraise_once=appraise_once, overlay=overlay, hide_timer=ht)
+
+    def _set_price_enabled(on: bool) -> None:
+        if on and not pc["built"]:
+            _build_pricechecker()
+        pc["enabled"] = on
+        if not on and pc.get("overlay"):
+            pc["overlay"].post_hide()
+        price_action.setText("Price-Checker stoppen" if on else "Price-Checker starten")
+
+    def _on_trigger() -> None:
+        # an appraise request (hotkey / tray) auto-starts the checker if needed
+        if not pc["enabled"]:
+            _set_price_enabled(True)
+        if pc.get("appraise_once"):
+            pc["appraise_once"]()
+
+    bridge.trigger.connect(_on_trigger)
+
+    # Always-on trigger sources (no capture until the checker is enabled):
+    #  1. Unix-socket poke from `appraiser trigger` (bound to a desktop shortcut),
+    #  2. the GlobalShortcuts portal (best-effort; KDE / GNOME 48+).
+    from aldur_appraiser.trigger import serve
+    from aldur_appraiser.vision.global_hotkey import start_global_hotkey
+
+    trigger_srv = serve(bridge.trigger.emit)  # keep a ref so it isn't GC'd
+    hk_accel = user_settings.get("hotkey", user_settings.DEFAULT_HOTKEY)
+    portal_hotkey = start_global_hotkey(bridge.trigger.emit, trigger=accel_to_portal(hk_accel))
+    _keepalive = (trigger_srv, portal_hotkey)  # noqa: F841
 
     def _check_updates(notify_uptodate: bool) -> None:
         def run():
@@ -296,129 +330,95 @@ def run_overlay(*, backend: str | None = None, style: str = "corner", refresh: b
 
         threading.Thread(target=run, daemon=True).start()
 
-    tray = _make_tray(
-        app, s, app_icon, on_check=lambda: _check_updates(True), on_appraise=appraise_once
-    )
+    def open_temple() -> None:
+        try:  # launch the planner as its own process
+            subprocess.Popen([sys.executable, "-m", "aldur_appraiser", "temple"])
+        except Exception as exc:  # noqa: BLE001
+            bridge.error.emit(f"Temple-Start fehlgeschlagen: {exc}")
 
+    def set_hotkey() -> None:
+        cur = user_settings.get("hotkey", user_settings.DEFAULT_HOTKEY)
+        text, ok = QInputDialog.getText(
+            None, "Appraise-Hotkey",
+            "Tastenkürzel (GTK-Format, z. B. <Control><Alt>p):", text=cur,
+        )
+        if not ok or not text.strip():
+            return
+        accel = text.strip()
+        user_settings.set("hotkey", accel)
+        bound = bind_gnome_shortcut(accel)
+        if bound:
+            body = f"Hotkey gesetzt: {accel} (GNOME-Kürzel eingetragen)."
+        else:
+            body = (f"Hotkey gespeichert: {accel}. Automatische Bindung nicht möglich — "
+                    "bitte 'appraiser trigger' in den Tastatur-Einstellungen darauf legen.")
+        if tray is not None:
+            tray.showMessage("Aldur Appraiser", body, tray.MessageIcon.Information, 9000)
+
+    # --- tray menu ----------------------------------------------------------
+    _has_tray = QSystemTrayIcon.isSystemTrayAvailable()
+    tray = QSystemTrayIcon(_tray_icon(app_icon)) if _has_tray else None
+    price_action = QAction("Price-Checker starten")
     if tray is not None:
+        tray.setToolTip("Aldur Appraiser")
+        menu = QMenu()
+        title = QAction(f"Aldur Appraiser v{__version__}", menu)
+        title.setEnabled(False)
+        menu.addAction(title)
+        menu.addSeparator()
+        price_action.setParent(menu)
+        price_action.triggered.connect(lambda: _set_price_enabled(not pc["enabled"]))
+        menu.addAction(price_action)
+        appraise_action = QAction("Jetzt bewerten", menu)
+        appraise_action.triggered.connect(bridge.trigger.emit)
+        menu.addAction(appraise_action)
+        menu.addSeparator()
+        temple_action = QAction("Temple Planner öffnen", menu)
+        temple_action.triggered.connect(open_temple)
+        menu.addAction(temple_action)
+        menu.addSeparator()
+        hotkey_action = QAction("Appraise-Hotkey festlegen…", menu)
+        hotkey_action.triggered.connect(set_hotkey)
+        menu.addAction(hotkey_action)
+        check_action = QAction("Nach Updates suchen", menu)
+        check_action.triggered.connect(lambda: _check_updates(True))
+        menu.addAction(check_action)
+        menu.addSeparator()
+        quit_action = QAction("Beenden", menu)
+        quit_action.triggered.connect(app.quit)
+        menu.addAction(quit_action)
+        tray.setContextMenu(menu)
+        tray._menu = menu  # keep refs alive
+        tray.activated.connect(
+            lambda r: menu.popup(QCursor.pos())
+            if r == QSystemTrayIcon.ActivationReason.Trigger else None
+        )
+
         def _notify(body, level):
             tray.showMessage("Aldur Appraiser", body, level, 9000)
 
         info = tray.MessageIcon.Information
         bridge.error.connect(lambda m: _notify(m, tray.MessageIcon.Critical))
         bridge.uptodate.connect(lambda v: _notify(f"v{v} ist aktuell.", info))
-
-        added = {"done": False}
-
-        def _on_update(latest):
-            _notify(f"Update {latest} verfügbar — klicken zum Öffnen.", info)
-            menu = tray.contextMenu()
-            if menu is not None and not added["done"]:
-                act = QAction(f"Update {latest} herunterladen", menu)
-                act.triggered.connect(lambda: QDesktopServices.openUrl(QUrl(updates.RELEASES_PAGE)))
-                menu.insertAction(menu.actions()[-1], act)  # above "Beenden"
-                added["done"] = True
-                added["action"] = act  # keep a reference alive
-
-        bridge.update.connect(_on_update)
+        bridge.update.connect(lambda v: _notify(f"Update {v} verfügbar — Releases öffnen.", info))
         tray.messageClicked.connect(
             lambda: QDesktopServices.openUrl(QUrl(updates.RELEASES_PAGE))
         )
+        tray.show()
     else:
-        # No system tray: fall back to the console so the update hint (and
-        # backend errors) aren't silently dropped.
-        bridge.update.connect(
-            lambda latest: print(
-                f"Update {latest} available — download: {updates.RELEASES_PAGE}",
-                file=sys.stderr,
-            )
-        )
-        bridge.uptodate.connect(lambda v: print(f"v{v} is up to date."))
         bridge.error.connect(lambda m: print(f"error: {m}", file=sys.stderr))
+        bridge.update.connect(
+            lambda v: print(f"update {v}: {updates.RELEASES_PAGE}", file=sys.stderr)
+        )
 
-    # Trigger sources (all marshal to the GUI thread via the bridge):
-    #  1. a Unix-socket poke from `appraiser trigger` — bind it to a desktop
-    #     keyboard shortcut (the reliable path on GNOME), and
-    #  2. the GlobalShortcuts portal (best-effort; KDE / GNOME 48+).
-    # The tray's "Jetzt bewerten" is always available as a fallback.
-    from aldur_appraiser.trigger import serve, socket_path
-    from aldur_appraiser.vision.global_hotkey import start_global_hotkey
-
-    trigger_srv = serve(bridge.trigger.emit)  # keep a ref so it isn't GC'd
-    hotkey = start_global_hotkey(bridge.trigger.emit)
-
-    print(f"aldur-appraiser running in the tray (backend={s.backend}, league={s.pc.league}).")
-    print("Open a reward panel in-game, then appraise on demand:")
-    if trigger_srv is not None:
-        print(f"  • bind a keyboard shortcut to:  appraiser trigger   (socket {socket_path()})")
-    if hotkey is not None:
-        print("  • or the registered global hotkey (KDE / GNOME 48+)")
-    print("  • or the tray icon → 'Jetzt bewerten'")
-    # Let Python process SIGINT while the Qt event loop runs.
+    print("aldur-appraiser running in the tray. Use its menu to start the "
+          "Price-Checker or open the Temple Planner.")
     signal.signal(signal.SIGINT, lambda *_: app.quit())
-    timer = QTimer()
-    timer.start(200)
-    timer.timeout.connect(lambda: None)
-    _check_updates(notify_uptodate=False)  # silent auto-check on startup
+    keep = QTimer()  # let Python handle SIGINT while Qt runs
+    keep.start(200)
+    keep.timeout.connect(lambda: None)
+    _check_updates(notify_uptodate=False)
     return app.exec()
-
-
-def _make_tray(app, setup, icon_path, on_check, on_appraise=None):
-    """System-tray icon with a right-click menu (appraise now, check updates, quit)."""
-    from PySide6.QtGui import QAction, QColor, QCursor, QIcon, QPainter, QPixmap
-    from PySide6.QtWidgets import QMenu, QSystemTrayIcon
-
-    from aldur_appraiser import __version__
-
-    if not QSystemTrayIcon.isSystemTrayAvailable():
-        return None
-
-    if icon_path is not None:
-        icon = QIcon(str(icon_path))
-    else:  # fallback: a simple gold disc
-        pm = QPixmap(32, 32)
-        pm.fill(QColor(0, 0, 0, 0))
-        p = QPainter(pm)
-        p.setRenderHint(QPainter.Antialiasing)
-        p.setBrush(QColor("#d9c89a"))
-        p.setPen(QColor("#5a4a2a"))
-        p.drawEllipse(3, 3, 26, 26)
-        p.end()
-        icon = QIcon(pm)
-
-    tray = QSystemTrayIcon(icon)
-    tray.setToolTip(f"Aldur Appraiser — {setup.pc.league}")
-    menu = QMenu()
-    title = QAction(f"Aldur Appraiser v{__version__}", menu)
-    title.setEnabled(False)
-    menu.addAction(title)
-    menu.addSeparator()
-    if on_appraise is not None:
-        appraise_action = QAction("Jetzt bewerten", menu)
-        appraise_action.triggered.connect(on_appraise)
-        menu.addAction(appraise_action)
-        menu.addSeparator()
-    check_action = QAction("Nach Updates suchen", menu)
-    check_action.triggered.connect(on_check)
-    menu.addAction(check_action)
-    menu.addSeparator()
-    quit_action = QAction("Beenden", menu)
-    quit_action.triggered.connect(app.quit)
-    menu.addAction(quit_action)
-    tray.setContextMenu(menu)
-
-    # Keep Python refs alive (setContextMenu doesn't take ownership -> the menu
-    # would be garbage-collected and no menu shows on right-click).
-    tray._menu = menu
-    # Fallback: also pop the menu on left-click, in case the compositor's tray
-    # host doesn't surface the right-click context menu.
-    tray.activated.connect(
-        lambda reason: menu.popup(QCursor.pos())
-        if reason == QSystemTrayIcon.ActivationReason.Trigger
-        else None
-    )
-    tray.show()
-    return tray
 
 
 def run_app(
