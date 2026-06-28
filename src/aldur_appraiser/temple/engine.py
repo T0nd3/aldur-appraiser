@@ -48,8 +48,8 @@ class Temple:
     # Highest tier a room can reach. Default 3; the Atlas "Transcendent Progress"
     # node raises it to 4 (rooms may then climb one rank higher).
     max_tier: int = 3
-    # cells a Medallion was applied to (+1 tier on any room, capped at max_tier).
-    medallion_boosts: set[Cell] = field(default_factory=set)
+    # cell -> number of Medallions applied (+1 tier each, capped at max_tier).
+    medallion_boosts: dict[Cell, int] = field(default_factory=dict)
 
     # --- grid basics ---------------------------------------------------------
 
@@ -57,7 +57,7 @@ class Temple:
         t = Temple(self.size, self.entrance, set(self.blocked), dict(self.cells))
         t.tier_overrides = dict(self.tier_overrides)
         t.max_tier = self.max_tier
-        t.medallion_boosts = set(self.medallion_boosts)
+        t.medallion_boosts = dict(self.medallion_boosts)
         return t
 
     def to_dict(self) -> dict:
@@ -69,7 +69,7 @@ class Temple:
             "cells": {f"{x},{y}": rid for (x, y), rid in self.cells.items()},
             "tier_overrides": {f"{x},{y}": t for (x, y), t in self.tier_overrides.items()},
             "max_tier": self.max_tier,
-            "medallion_boosts": [list(c) for c in sorted(self.medallion_boosts)],
+            "medallion_boosts": {f"{x},{y}": n for (x, y), n in self.medallion_boosts.items()},
         }
 
     @classmethod
@@ -86,7 +86,11 @@ class Temple:
         )
         t.tier_overrides = {key(k): int(v) for k, v in d.get("tier_overrides", {}).items()}
         t.max_tier = int(d.get("max_tier", 3))
-        t.medallion_boosts = {tuple(c) for c in d.get("medallion_boosts", [])}  # type: ignore[misc]
+        mb = d.get("medallion_boosts", {})
+        if isinstance(mb, dict):
+            t.medallion_boosts = {key(k): int(v) for k, v in mb.items()}
+        else:  # legacy format: a list of [x, y] cells, one boost each
+            t.medallion_boosts = {tuple(c): 1 for c in mb}  # type: ignore[misc]
         return t
 
     def in_bounds(self, c: Cell) -> bool:
@@ -110,7 +114,7 @@ class Temple:
     def remove(self, c: Cell) -> None:
         self.cells.pop(c, None)
         self.tier_overrides.pop(c, None)
-        self.medallion_boosts.discard(c)
+        self.medallion_boosts.pop(c, None)
 
     def connection_blocked(self, placing_id: str, neighbor_cell: Cell) -> bool:
         """True if a newly-placed `placing_id` may NOT connect to the room at
@@ -265,10 +269,8 @@ class Temple:
         return min(tier, self.max_tier)
 
     def _boosted(self, c: Cell, tier: int) -> int:
-        """Apply a Medallion (+1 tier on any room) and clamp to the max tier."""
-        if c in self.medallion_boosts:
-            tier += 1
-        return min(tier, self.max_tier)
+        """Apply Medallions (+1 tier each, stackable) and clamp to the max tier."""
+        return min(tier + self.medallion_boosts.get(c, 0), self.max_tier)
 
     def tiers(self) -> dict[Cell, int]:
         """Tier of every placed room (paths excluded).

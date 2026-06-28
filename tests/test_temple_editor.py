@@ -209,10 +209,14 @@ def test_medallion_brush_boosts_a_room_to_tier_4():
     w.temple.place((3, 4), "alchemy_lab")
     assert w.temple.room_tier((4, 4)) == 3
     w.brush = MEDALLION
-    w._on_cell((4, 4), int(Qt.LeftButton.value))
-    assert (4, 4) in w.temple.medallion_boosts
-    assert w.temple.room_tier((4, 4)) == 4       # +1 from the medallion
-    w._on_cell((4, 4), int(Qt.LeftButton.value))  # clicking again toggles it off
+    w._on_cell((4, 4), int(Qt.LeftButton.value))      # left-click: +1 medallion
+    assert w.temple.medallion_boosts[(4, 4)] == 1
+    assert w.temple.room_tier((4, 4)) == 4            # T3 + 1 -> T4
+    w._on_cell((4, 4), int(Qt.LeftButton.value))      # stacks to +2
+    assert w.temple.medallion_boosts[(4, 4)] == 2
+    w._on_cell((4, 4), int(Qt.RightButton.value))     # right-click: remove one
+    assert w.temple.medallion_boosts[(4, 4)] == 1
+    w._on_cell((4, 4), int(Qt.RightButton.value))     # and the last one clears it
     assert (4, 4) not in w.temple.medallion_boosts
 
 

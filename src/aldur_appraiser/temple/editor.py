@@ -167,7 +167,7 @@ def build_editor():
             self._violation_cells: set[tuple[int, int]] = set()
             self._removable: set[tuple[int, int]] = set()
             self._disconnected: set[tuple[int, int]] = set()
-            self._boosted: set[tuple[int, int]] = set()
+            self._boosted: dict[tuple[int, int], int] = {}
             # suggested cell -> QColor (one colour per suggested room, matching its
             # line in the "Best placements" list).
             self._highlights: dict[tuple[int, int], object] = {}
@@ -201,7 +201,7 @@ def build_editor():
             # rooms not reachable from the entrance: normal ones need a Path/road
             # drawn (Vaults/Royal Access/Architect may legally stay orphans).
             self._disconnected = disconnected_rooms(self.temple)
-            self._boosted = set(self.temple.medallion_boosts)
+            self._boosted = dict(self.temple.medallion_boosts)
             self.update()
 
         def _cell_at(self, x: int, y: int) -> tuple[int, int] | None:
@@ -303,10 +303,12 @@ def build_editor():
                                        Qt.AlignBottom | Qt.AlignHCenter, "I" * tier)
                         else:
                             p.drawText(r, Qt.AlignCenter, f"{abbrev(rid)}\n{'I' * tier}")
-                    if c in self._boosted:  # Medallion +1 tier
+                    if c in self._boosted:  # Medallion +N tier (stackable)
+                        n = self._boosted[c]
                         p.setPen(QColor("#ffd24a"))
                         p.setFont(self._label_font)
-                        p.drawText(r.adjusted(4, 2, -2, -2), Qt.AlignTop | Qt.AlignLeft, "✦")
+                        label = "✦" if n <= 1 else f"✦{n}"
+                        p.drawText(r.adjusted(4, 2, -2, -2), Qt.AlignTop | Qt.AlignLeft, label)
                     if rid and rid != "path" and is_volatile(ROOMS[rid]):
                         p.setPen(QColor("#d04ad0"))  # one-use: consumed on completion
                         p.drawRect(r.adjusted(3, 3, -3, -3))
@@ -640,13 +642,18 @@ def build_editor():
         def _on_cell(self, cell, button) -> None:
             from PySide6.QtCore import Qt
 
-            # Medallion brush: left-click a placed room to toggle its +1-tier boost.
-            if self.brush == MEDALLION and button != int(Qt.RightButton.value):
+            # Medallion brush: left-click a placed room to add a +1-tier boost
+            # (stackable), right-click to remove one.
+            if self.brush == MEDALLION:
                 if self.temple.is_room(cell):
-                    if cell in self.temple.medallion_boosts:
-                        self.temple.medallion_boosts.discard(cell)
+                    boosts = self.temple.medallion_boosts
+                    if button == int(Qt.RightButton.value):
+                        if boosts.get(cell, 0) > 1:
+                            boosts[cell] -= 1
+                        else:
+                            boosts.pop(cell, None)
                     else:
-                        self.temple.medallion_boosts.add(cell)
+                        boosts[cell] = boosts.get(cell, 0) + 1
                     self._refresh()
                     self._persist()
                 return
