@@ -94,10 +94,11 @@ def detect_medallions(
     )
     if header is not None:
         hx, hy = int(header.box[0] / ocr_scale), int(header.box[3] / ocr_scale)
-        x_lo, x_hi = hx + 60, hx + 180          # slots sit right of the header text
-        y_lo, y_hi = hy + 20, hy + 560          # and below it (a few visible slots)
+        # the slots form a 2-column x 3-row grid below + right of the header text
+        x_lo, x_hi = hx + 40, hx + 340
+        y_lo, y_hi = hy + 20, hy + 560
     else:
-        x_lo, x_hi = max(0, w - 160), w         # fallback: scan the right column
+        x_lo, x_hi = max(0, w - 320), w         # fallback: scan the right panel
         y_lo, y_hi = 0, h
     x_hi = min(x_hi, w - win)
     y_hi = min(y_hi, h - win)
@@ -113,13 +114,14 @@ def detect_medallions(
             rid, score = _best_room_match(window)
             if rid is not None and score >= threshold:
                 hits.append((y, x, score, rid))
-    # non-max suppression: one medallion per row cluster, keep the strongest
+    # 2D non-max suppression: one medallion per slot. Two medallions can share a
+    # row (the panel has 2 columns), so suppress only when BOTH axes are close.
     hits.sort(key=lambda hh: -hh[2])
     kept: list[tuple[int, int, float, str]] = []
     for y, x, score, rid in hits:
-        if all(abs(y - ky) > win * 0.7 for ky, _, _, _ in kept):
+        if all(abs(y - ky) > win * 0.7 or abs(x - kx) > win * 0.7 for ky, kx, _, _ in kept):
             kept.append((y, x, score, rid))
-    kept.sort(key=lambda hh: hh[0])  # top to bottom
+    kept.sort(key=lambda hh: (hh[0], hh[1]))  # reading order: top-to-bottom, left-to-right
     return [rid for _, _, _, rid in kept]
 
 
