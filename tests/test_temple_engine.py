@@ -200,6 +200,14 @@ def test_connection_blocked_caps_alchemy_per_armoury():
     assert t.connection_blocked("smithy", (4, 4)) is False
 
 
+def test_garrison_feeding_a_commander_cannot_take_a_synthflesh():
+    t = _temple()
+    t.place((4, 4), "garrison")
+    assert t.connection_blocked("synthflesh_lab", (4, 4)) is False  # plain garrison: ok
+    t.place((5, 4), "commander")                                    # garrison now feeds it
+    assert t.connection_blocked("synthflesh_lab", (4, 4)) is True   # converter blocked
+
+
 def test_max_tier_survives_dict_roundtrip():
     t = _temple()
     t.max_tier = 4

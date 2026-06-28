@@ -132,6 +132,11 @@ MAX_NEIGHBOR_RULES: tuple[tuple[str, str, str, int], ...] = (
     ("alchemy_lab", "armoury", "alchemy_lab", 1),
     ("synthflesh_lab", "garrison", "synthflesh_lab", 1),
     ("synthflesh_lab", "garrison", "armoury", 1),
+    # A Garrison feeding a Commander can't also be converted by a Synthflesh Lab
+    # (ALT/in-game: extends the {armoury⊥synthflesh}, {commander⊥spymaster}
+    # mutual-exclusivity pattern; missing from the Tetriszocker port).
+    ("synthflesh_lab", "garrison", "commander", 1),
+    ("commander", "garrison", "synthflesh_lab", 1),
 )
 
 
