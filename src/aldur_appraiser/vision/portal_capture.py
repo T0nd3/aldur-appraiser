@@ -61,13 +61,27 @@ def _restore_disabled_path() -> Path:
     return config_dir() / "screencast_no_restore"
 
 
+# In-memory only: if a restore token stalls we skip it for the rest of THIS
+# process, but try again next launch — modern KDE/Plasma 6 handles restore fine,
+# so a one-off hiccup must not permanently force the screen-picker dialog every
+# run (which is what the old persistent flag did).
+_RESTORE_DISABLED = False
+
+
 def _restore_disabled() -> bool:
-    """True once we've learned that restore tokens stall on this compositor."""
-    return _restore_disabled_path().exists()
+    """True if a restore token stalled earlier in this process (not persisted).
+    A stale persistent flag from older versions also counts, but is cleared so
+    the next launch retries restore."""
+    global _RESTORE_DISABLED
+    if _restore_disabled_path().exists():
+        _restore_disabled_path().unlink(missing_ok=True)  # heal the old sticky flag
+        _RESTORE_DISABLED = True
+    return _RESTORE_DISABLED
 
 
 def _disable_restore() -> None:
-    _restore_disabled_path().write_text("1", encoding="utf-8")
+    global _RESTORE_DISABLED
+    _RESTORE_DISABLED = True
 
 
 def _read_restore_token() -> str | None:
