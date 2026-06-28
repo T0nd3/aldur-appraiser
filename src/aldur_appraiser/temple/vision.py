@@ -94,8 +94,9 @@ def detect_medallions(
     )
     if header is not None:
         hx, hy = int(header.box[0] / ocr_scale), int(header.box[3] / ocr_scale)
-        # the slots form a 2-column x 3-row grid below + right of the header text
-        x_lo, x_hi = hx + 40, hx + 340
+        # the slots form a 2-column x 3-row grid below the header — the left column
+        # starts slightly LEFT of the header text, the right column to its right.
+        x_lo, x_hi = hx - 110, hx + 150
         y_lo, y_hi = hy + 20, hy + 560
     else:
         x_lo, x_hi = max(0, w - 320), w         # fallback: scan the right panel

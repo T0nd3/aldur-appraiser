@@ -27,6 +27,8 @@ config.local.toml
 
 # Local-only test screenshots (not for the public repo)
 assets/fixtures/*.png
+assets/fixtures/*.jpg
+assets/fixtures/*.jpeg
 
 # Flatpak build artifacts (the manifest + python-deps are tracked; build output isn't)
 packaging/flatpak/_build/

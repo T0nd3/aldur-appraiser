@@ -18,6 +18,7 @@ FIXDIR = Path(__file__).resolve().parents[1] / "assets" / "fixtures"
 CARDS = FIXDIR / "temple_cards.png"
 FULL = FIXDIR / "temple_full.png"
 MEDALLIONS = FIXDIR / "temple_medallions.png"
+MEDALLIONS_2COL = FIXDIR / "temple_medallions_02.jpg"
 
 EXPECTED = ["path", "generator", "treasure_vault", "path", "smithy", "path"]
 
@@ -48,3 +49,13 @@ def test_detect_medallions_matches_room_icons():
         pytest.skip("room icons unavailable (offline) — needed as match templates")
     # the held medallion's symbol is the Synthflesh Lab room icon
     assert detect_medallions(cv2.imread(str(MEDALLIONS))) == ["synthflesh_lab"]
+
+
+@pytest.mark.skipif(not MEDALLIONS_2COL.exists(), reason="2-column medallions fixture not present")
+def test_detect_medallions_in_a_two_column_grid():
+    pytest.importorskip("rapidocr_onnxruntime")
+    if not _has_room_icons():
+        pytest.skip("room icons unavailable (offline) — needed as match templates")
+    # 4/6 panel: a Smithy room medallion (left column) plus three "+1 tier" arrow
+    # medallions (right column) which don't match a room icon and are ignored.
+    assert detect_medallions(cv2.imread(str(MEDALLIONS_2COL))) == ["smithy"]
