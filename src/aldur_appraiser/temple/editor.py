@@ -557,11 +557,31 @@ def build_editor():
             if not cards:
                 self.suggestions.setText("Hand is empty — add the cards you drew.")
                 return
-            ranked = suggest(self.temple, cards, values=self.weights, top=5)
+            ranked = suggest(self.temple, cards, values=self.weights, top=20)
             if not ranked:
                 self.suggestions.setText("No legal placement found.")
                 self.grid.set_highlights(())
                 return
+            # Pick at most one suggestion per cell so every list line maps to its
+            # own coloured grid cell (different rooms often share the best cells).
+            # First take each distinct room's best free cell — so each room in the
+            # hand shows up — then fill the rest with the next-best free cells.
+            used: set[tuple[int, int]] = set()
+            chosen = []
+            seen_rooms: set[str] = set()
+            for s in ranked:
+                if s.card not in seen_rooms and s.cell not in used:
+                    seen_rooms.add(s.card)
+                    used.add(s.cell)
+                    chosen.append(s)
+            for s in ranked:
+                if len(chosen) >= 5:
+                    break
+                if s.cell not in used:
+                    used.add(s.cell)
+                    chosen.append(s)
+            chosen.sort(key=lambda s: -s.gain)
+            ranked = chosen[:5]
             # one colour per suggested room, shared by its grid cell(s) and its
             # line in the list, so it's obvious which room goes where.
             room_color: dict[str, str] = {}
