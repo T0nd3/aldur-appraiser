@@ -240,6 +240,7 @@ def run_overlay(*, backend: str | None = None, style: str = "corner", refresh: b
         update = Signal(str)     # a newer release is available
         uptodate = Signal(str)   # manual check: already current
         trigger = Signal()       # appraise-now request (hotkey / tray), GUI thread
+        shown = Signal()         # a result was just shown -> (re)start the auto-hide timer
 
     bridge = _Bridge()
 
@@ -261,8 +262,10 @@ def run_overlay(*, backend: str | None = None, style: str = "corner", refresh: b
                         cap.assert_capturable()
                     frame = cap.grab()
                 loop._last_sig = None  # force a fresh evaluation each request
-                if loop.step(frame) is None and not loop._panel_visible:
+                if loop.step(frame) is None:
                     overlay.post_hide()  # no reward panel found -> clear any stale HUD
+                else:
+                    bridge.shown.emit()  # got a result -> (re)start the auto-hide timer
             except Exception as exc:  # noqa: BLE001 - surface to the tray, keep running
                 msg = f"{type(exc).__name__}: {exc}"
                 print(f"capture error: {msg}", file=sys.stderr)
@@ -273,6 +276,15 @@ def run_overlay(*, backend: str | None = None, style: str = "corner", refresh: b
         threading.Thread(target=work, daemon=True).start()
 
     bridge.trigger.connect(appraise_once)
+
+    # Auto-hide the result so an on-demand appraisal doesn't linger forever.
+    # Each new appraisal restarts the timer; ALDUR_HIDE_MS=0 disables it.
+    hide_after_ms = int(os.environ.get("ALDUR_HIDE_MS", "12000"))
+    hide_timer = QTimer()
+    hide_timer.setSingleShot(True)
+    hide_timer.timeout.connect(overlay.post_hide)
+    if hide_after_ms > 0:
+        bridge.shown.connect(lambda: hide_timer.start(hide_after_ms))
 
     def _check_updates(notify_uptodate: bool) -> None:
         def run():
