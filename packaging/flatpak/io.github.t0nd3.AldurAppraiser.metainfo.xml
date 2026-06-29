@@ -38,6 +38,11 @@
   <content_rating type="oars-1.1"/>
 
   <releases>
+    <release version="0.3.2" date="2026-06-29">
+      <description>
+        <p>Adds a tray "Auto mode" that continuously appraises the reward panel without pressing the hotkey, lets you bind any key as the hotkey (including a single key like 0) by just pressing it, and keeps one screen-capture session open while the checker runs so Wayland only asks for screen-share permission once instead of on every check.</p>
+      </description>
+    </release>
     <release version="0.3.1" date="2026-06-28">
       <description>
         <p>Windows fixes: the Temple Planner now opens from the tray menu (the packaged app launched itself the wrong way), and a hotkey that can't be registered — e.g. because the combination is already taken — now warns you instead of failing silently.</p>
