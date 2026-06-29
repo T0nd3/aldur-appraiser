@@ -43,9 +43,11 @@ def test_named_key():
     assert vk == 0x20
 
 
-def test_bare_key_without_modifier_is_rejected():
-    # a modifier-less hotkey would hijack normal typing
-    assert parse_accelerator("p") is None
+def test_bare_key_without_modifier_is_allowed():
+    # a single key (no modifier) is a valid hotkey — e.g. the user wants just "0"
+    mods, vk = parse_accelerator("0")
+    assert mods == _MOD_NOREPEAT  # only NOREPEAT, no modifier bits
+    assert vk == ord("0")
 
 
 def test_unknown_modifier_rejected():

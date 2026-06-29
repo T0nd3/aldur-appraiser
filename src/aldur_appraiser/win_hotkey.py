@@ -72,8 +72,7 @@ def parse_accelerator(accel: str) -> tuple[int, int] | None:
         vk = ord(key.upper())  # A-Z / 0-9 share their ASCII as the VK code
     else:
         return None
-    if mods == 0:
-        return None  # a bare key would hijack normal typing — require a modifier
+    # A bare key (no modifier) is allowed — the user may want e.g. just "0".
     return mods | _MOD_NOREPEAT, vk
 
 

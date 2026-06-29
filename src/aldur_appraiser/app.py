@@ -237,7 +237,9 @@ def run_overlay(*, backend: str | None = None, style: str = "corner", refresh: b
         shown = Signal()         # a result was shown -> (re)start the auto-hide timer
 
     bridge = _Bridge()
-    pc: dict = {"built": False, "enabled": False}  # price-checker state (lazy)
+    # price-checker state (lazy). `cap` is a capture session kept open while the
+    # checker runs so Wayland's portal only prompts once, not on every check.
+    pc: dict = {"built": False, "enabled": False, "auto": False, "cap": None}
 
     def _build_pricechecker() -> None:
         """Load prices + build the overlay/capture pipeline on first use."""
@@ -260,50 +262,120 @@ def run_overlay(*, backend: str | None = None, style: str = "corner", refresh: b
         loop = _make_loop(s, on_result=on_result, on_hide=overlay.post_hide, on_busy=on_busy)
         busy = threading.Event()
 
+        def acquire_cap():
+            """Open the capture session once and keep it. Reusing one session means
+            the Wayland portal only shows its screen-share dialog on the first
+            grab, not on every appraisal."""
+            if pc.get("cap") is None:
+                cap = open_capture(backend=s.backend)
+                if hasattr(cap, "connect"):
+                    cap.connect()  # portal backend: run the D-Bus handshake now
+                if hasattr(cap, "assert_capturable"):
+                    cap.assert_capturable()
+                pc["cap"] = cap
+            return pc["cap"]
+
+        def release_cap() -> None:
+            cap = pc.get("cap")
+            pc["cap"] = None
+            if cap is not None:
+                try:
+                    cap.close()
+                except Exception:  # noqa: BLE001 - best-effort teardown
+                    pass
+
         def appraise_once() -> None:
-            if not pc["enabled"] or busy.is_set():
+            if not pc["enabled"] or pc.get("auto") or busy.is_set():
                 return
             busy.set()
 
             def work() -> None:
                 try:
-                    with open_capture(backend=s.backend) as cap:
-                        if hasattr(cap, "assert_capturable"):
-                            cap.assert_capturable()
-                        frame = cap.grab()
+                    cap = acquire_cap()
                     loop._last_sig = None  # force a fresh evaluation each request
-                    if loop.step(frame) is None:
+                    if loop.step(cap.grab()) is None:
                         overlay.post_hide()
                     else:
                         bridge.shown.emit()
                 except Exception as exc:  # noqa: BLE001 - surface to the tray, keep running
                     print(f"capture error: {type(exc).__name__}: {exc}", file=sys.stderr)
                     bridge.error.emit(f"{type(exc).__name__}: {exc}")
+                    release_cap()  # drop a broken session so the next try reconnects
                 finally:
                     busy.clear()
 
             threading.Thread(target=work, daemon=True).start()
+
+        def auto_worker(stop: threading.Event) -> None:
+            """Continuous appraisal loop (the pre-hotkey 'auto' behaviour): keep
+            grabbing and re-evaluate whenever the reward panel's content changes."""
+            interval = 1.0 / max(0.5, s.poll_fps)
+            try:
+                cap = acquire_cap()
+            except Exception as exc:  # noqa: BLE001
+                print(f"capture error: {type(exc).__name__}: {exc}", file=sys.stderr)
+                bridge.error.emit(f"{type(exc).__name__}: {exc}")
+                return
+            loop._last_sig = None
+            while not stop.is_set():
+                t0 = time.monotonic()
+                try:
+                    loop.step(cap.grab())
+                except Exception as exc:  # noqa: BLE001
+                    print(f"capture error: {type(exc).__name__}: {exc}", file=sys.stderr)
+                    bridge.error.emit(f"{type(exc).__name__}: {exc}")
+                    release_cap()
+                    break
+                stop.wait(max(0.0, interval - (time.monotonic() - t0)))
 
         hide_ms = int(os.environ.get("ALDUR_HIDE_MS", "12000"))
         ht = QTimer()
         ht.setSingleShot(True)
         ht.timeout.connect(overlay.post_hide)
         if hide_ms > 0:
-            bridge.shown.connect(lambda: ht.start(hide_ms))
-        pc.update(built=True, appraise_once=appraise_once, overlay=overlay, hide_timer=ht)
+            # Auto mode keeps a result up until the panel actually closes; only the
+            # on-demand (hotkey/menu) result auto-hides after the timeout.
+            bridge.shown.connect(lambda: None if pc.get("auto") else ht.start(hide_ms))
+        pc.update(built=True, appraise_once=appraise_once, overlay=overlay,
+                  hide_timer=ht, release_cap=release_cap, auto_worker=auto_worker)
 
     def _set_price_enabled(on: bool) -> None:
         if on and not pc["built"]:
             _build_pricechecker()
         pc["enabled"] = on
-        if not on and pc.get("overlay"):
-            pc["overlay"].post_hide()
+        if not on:
+            _set_auto(False)  # stopping the checker also stops auto mode
+            if pc.get("overlay"):
+                pc["overlay"].post_hide()
+            if pc.get("release_cap"):
+                pc["release_cap"]()  # close the capture session (drops the portal share)
         price_action.setText("Price-Checker stoppen" if on else "Price-Checker starten")
+
+    def _set_auto(on: bool) -> None:
+        if on:
+            if not pc["enabled"]:
+                _set_price_enabled(True)
+            if pc.get("auto"):
+                return
+            pc["auto"] = True
+            stop = threading.Event()
+            pc["auto_stop"] = stop
+            threading.Thread(target=lambda: pc["auto_worker"](stop), daemon=True).start()
+        else:
+            pc["auto"] = False
+            if pc.get("auto_stop"):
+                pc["auto_stop"].set()
+            if pc.get("overlay"):
+                pc["overlay"].post_hide()
+        if auto_action is not None:
+            auto_action.setChecked(pc["auto"])
 
     def _on_trigger() -> None:
         # an appraise request (hotkey / tray) auto-starts the checker if needed
         if not pc["enabled"]:
             _set_price_enabled(True)
+        if pc.get("auto"):
+            return  # auto mode is already polling continuously
         if pc.get("appraise_once"):
             pc["appraise_once"]()
 
@@ -353,15 +425,69 @@ def run_overlay(*, backend: str | None = None, style: str = "corner", refresh: b
         except Exception as exc:  # noqa: BLE001
             bridge.error.emit(f"Temple-Start fehlgeschlagen: {exc}")
 
+    def _capture_hotkey():
+        """Modal dialog that records the next key (or combo) the user presses and
+        turns it into a GTK accelerator. A single key like '0' is allowed. Returns
+        the accelerator string, or None if cancelled with Esc."""
+        from PySide6.QtCore import Qt
+        from PySide6.QtGui import QKeySequence
+        from PySide6.QtWidgets import QDialog, QLabel, QVBoxLayout
+
+        mod_only = {Qt.Key_Control, Qt.Key_Alt, Qt.Key_Shift, Qt.Key_Meta,
+                    Qt.Key_Super_L, Qt.Key_Super_R, Qt.Key_AltGr}
+
+        class _Cap(QDialog):
+            def __init__(self):
+                super().__init__()
+                self.accel = None
+                self.setWindowTitle("Appraise-Hotkey festlegen")
+                lay = QVBoxLayout(self)
+                lay.addWidget(QLabel(
+                    "Drücke die gewünschte Taste oder Tastenkombination.\n"
+                    "Eine einzelne Taste (z. B. 0) ist erlaubt. Esc bricht ab."
+                ))
+                self.setMinimumWidth(360)
+
+            def keyPressEvent(self, e):  # noqa: N802 - Qt override
+                key = e.key()
+                if key == Qt.Key_Escape:
+                    self.reject()
+                    return
+                if key in mod_only:
+                    return  # ignore lone modifier presses; wait for a real key
+                ks = QKeySequence(key).toString()
+                if not ks:
+                    return
+                is_fkey = len(ks) >= 2 and ks[0] in "Ff" and ks[1:].isdigit()
+                base = ks.upper() if is_fkey else ks.lower()
+                m = e.modifiers()
+                parts = []
+                if m & Qt.ControlModifier:
+                    parts.append("<Control>")
+                if m & Qt.AltModifier:
+                    parts.append("<Alt>")
+                if m & Qt.ShiftModifier:
+                    parts.append("<Shift>")
+                if m & Qt.MetaModifier:
+                    parts.append("<Super>")
+                self.accel = "".join(parts) + base
+                self.accept()
+
+        dlg = _Cap()
+        return dlg.accel if dlg.exec() and dlg.accel else None
+
     def set_hotkey() -> None:
-        cur = user_settings.get("hotkey", user_settings.DEFAULT_HOTKEY)
-        text, ok = QInputDialog.getText(
-            None, "Appraise-Hotkey",
-            "Tastenkürzel (GTK-Format, z. B. <Control><Alt>p):", text=cur,
-        )
-        if not ok or not text.strip():
-            return
-        accel = text.strip()
+        accel = _capture_hotkey()
+        if accel is None:  # Esc -> offer manual text entry for exotic keysyms
+            cur = user_settings.get("hotkey", user_settings.DEFAULT_HOTKEY)
+            text, ok = QInputDialog.getText(
+                None, "Appraise-Hotkey",
+                "Oder Tastenkürzel manuell (GTK-Format, z. B. <Control><Alt>p):",
+                text=cur,
+            )
+            if not ok or not text.strip():
+                return
+            accel = text.strip()
         user_settings.set("hotkey", accel)
         if _is_windows:
             # Re-register the live system-wide hotkey right away.
@@ -388,6 +514,8 @@ def run_overlay(*, backend: str | None = None, style: str = "corner", refresh: b
     _has_tray = QSystemTrayIcon.isSystemTrayAvailable()
     tray = QSystemTrayIcon(_tray_icon(app_icon)) if _has_tray else None
     price_action = QAction("Price-Checker starten")
+    auto_action = QAction("Auto-Modus (laufend bewerten)")
+    auto_action.setCheckable(True)
     if tray is not None:
         tray.setToolTip("Aldur Appraiser")
         menu = QMenu()
@@ -398,6 +526,9 @@ def run_overlay(*, backend: str | None = None, style: str = "corner", refresh: b
         price_action.setParent(menu)
         price_action.triggered.connect(lambda: _set_price_enabled(not pc["enabled"]))
         menu.addAction(price_action)
+        auto_action.setParent(menu)
+        auto_action.triggered.connect(lambda: _set_auto(not pc["auto"]))
+        menu.addAction(auto_action)
         appraise_action = QAction("Jetzt bewerten", menu)
         appraise_action.triggered.connect(bridge.trigger.emit)
         menu.addAction(appraise_action)
